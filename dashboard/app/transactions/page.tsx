@@ -9,6 +9,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import DashboardPageLayout from "@/components/dashboard/layout"
 import CreditCardIcon from "@/components/icons/credit-card"
 import { useTransactions } from "@/hooks/use-transactions"
+<<<<<<< Updated upstream
+<<<<<<< Updated upstream
+import { useWallet } from "@/hooks/use-wallet"
+=======
+import { useAccount } from "wagmi"
+>>>>>>> Stashed changes
+=======
+import { useWallet } from "@/hooks/use-wallet"
+>>>>>>> Stashed changes
 
 // Helper function to format address
 const formatAddress = (address: string) => {
@@ -24,7 +33,25 @@ const getRiskLevel = (amount: string) => {
 };
 
 export default function TransactionsPage() {
-  const { transactions, loading, error, hasFetched, fetchTransactions, clearCache } = useTransactions();
+<<<<<<< Updated upstream
+<<<<<<< Updated upstream
+  const { walletAddress } = useWallet()
+  const { transactions, loading, error, hasFetched, fetchTransactions, clearCache } = useTransactions(walletAddress);
+=======
+  const { address: walletAddress } = useAccount();
+  const { transactions, allTransactions, loading, error, hasFetched, fetchTransactions, clearCache, walletFilter, setWalletFilter } = useTransactions();
+>>>>>>> Stashed changes
+=======
+  const { walletAddress } = useWallet();
+  const { 
+    transactions, 
+    loading, 
+    error, 
+    hasFetched, 
+    fetchTransactions, 
+    clearCache 
+  } = useTransactions({ merchantAddress: walletAddress });
+>>>>>>> Stashed changes
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
@@ -32,6 +59,20 @@ export default function TransactionsPage() {
     setSelectedTransaction(transaction)
     setIsModalOpen(true)
   }
+
+  const toggleMyTransactions = () => {
+    if (walletFilter) {
+      // Clear filter
+      setWalletFilter("")
+    } else {
+      // Apply filter to current wallet
+      if (walletAddress) {
+        setWalletFilter(walletAddress)
+      }
+    }
+  }
+
+  const isFiltered = !!walletFilter
 
   return (
     <DashboardPageLayout
@@ -41,6 +82,7 @@ export default function TransactionsPage() {
         icon: CreditCardIcon,
       }}
     >
+      
       <div className="flex flex-col h-full min-h-screen">
       {/* Header */}
       <div className="flex items-center justify-between px-8 py-4 border-b border-border/40">
@@ -80,9 +122,13 @@ export default function TransactionsPage() {
             <p className="text-muted-foreground">Manage and monitor payment operations</p>
           </div>
           <div className="flex gap-3">
-            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
+            <Button 
+              className={`${isFiltered ? 'bg-primary hover:bg-primary/90 text-primary-foreground' : 'bg-secondary hover:bg-secondary/90'}`}
+              onClick={toggleMyTransactions}
+              disabled={!walletAddress}
+            >
               <Filter className="size-4 mr-2" />
-              Filter
+              {isFiltered ? 'Show All' : 'My Transactions'}
             </Button>
             {!hasFetched ? (
               <Button 
@@ -129,8 +175,15 @@ export default function TransactionsPage() {
           <div className="bg-card border border-border/40 rounded-lg p-6">
             <div className="flex items-start justify-between">
               <div>
-                <div className="text-sm text-muted-foreground mb-2">TOTAL TRANSACTIONS</div>
+                <div className="text-sm text-muted-foreground mb-2">
+                  {isFiltered ? "MY TRANSACTIONS" : "TOTAL TRANSACTIONS"}
+                </div>
                 <div className="text-4xl font-bold">{loading ? "..." : transactions.length}</div>
+                {isFiltered && (
+                  <div className="text-xs text-muted-foreground mt-1">
+                    of {allTransactions.length} total
+                  </div>
+                )}
               </div>
               <Shield className="size-8 text-foreground" />
             </div>
@@ -161,8 +214,13 @@ export default function TransactionsPage() {
 
         {/* Transaction Table */}
         <div className="bg-card border border-border/40 rounded-lg overflow-hidden flex-1 flex flex-col">
-          <div className="p-6 border-b border-border/40">
+          <div className="p-6 border-b border-border/40 flex items-center justify-between">
             <h2 className="text-xl font-serif">TRANSACTION ROSTER</h2>
+            {isFiltered && (
+              <Badge variant="secondary" className="bg-primary/20 text-primary border-primary/40">
+                Showing My Transactions
+              </Badge>
+            )}
           </div>
 
           <div className="overflow-x-auto flex-1">
@@ -195,7 +253,12 @@ export default function TransactionsPage() {
                 ) : transactions.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="px-6 py-8 text-center text-muted-foreground">
-                      {!hasFetched ? "Click 'See Transactions' to load blockchain data" : "No StableCoin purchase events found"}
+                      {!hasFetched 
+                        ? "Click 'See Transactions' to load blockchain data" 
+                        : isFiltered
+                          ? "No transactions found for your wallet"
+                          : "No StableCoin purchase events found"
+                      }
                     </td>
                   </tr>
                 ) : (
@@ -273,8 +336,8 @@ export default function TransactionsPage() {
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="max-w-2xl bg-card border-border/40">
           <DialogHeader className="relative">
-            <DialogTitle className="text-3xl font-display mb-2">{selectedTransaction?.merchant}</DialogTitle>
-            <p className="text-muted-foreground font-mono">{selectedTransaction?.id}</p>
+            <DialogTitle className="text-3xl font-display mb-2">Transaction Details</DialogTitle>
+            <p className="text-muted-foreground font-mono text-sm">{selectedTransaction?.transactionHash}</p>
             <Button
               variant="ghost"
               size="icon"

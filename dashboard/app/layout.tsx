@@ -6,6 +6,7 @@ import localFont from "next/font/local"
 import { SidebarProvider } from "@/components/ui/sidebar"
 import { MobileHeader } from "@/components/dashboard/mobile-header"
 import { DashboardSidebar } from "@/components/dashboard/sidebar"
+import { Providers } from "@/providers"
 
 const robotoMono = Roboto_Mono({
   variable: "--font-roboto-mono",
@@ -38,17 +39,19 @@ export default function RootLayout({
         <link rel="preload" href="/fonts/Rebels-Fett.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
       </head>
       <body className={`${rebelGrotesk.variable} ${robotoMono.variable} antialiased`}>
-        <SidebarProvider>
-          <MobileHeader />
+        <Providers>
+          <SidebarProvider>
+            <MobileHeader />
 
-          {/* Desktop Layout */}
-          <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-gap lg:px-sides">
-            <div className="hidden lg:block col-span-2 top-0 relative">
-              <DashboardSidebar />
+            {/* Desktop Layout */}
+            <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-gap lg:px-sides">
+              <div className="hidden lg:block col-span-2 top-0 relative">
+                <DashboardSidebar />
+              </div>
+              <div className="col-span-1 lg:col-span-10">{children}</div>
             </div>
-            <div className="col-span-1 lg:col-span-10">{children}</div>
-          </div>
-        </SidebarProvider>
+          </SidebarProvider>
+        </Providers>
       </body>
     </html>
   )

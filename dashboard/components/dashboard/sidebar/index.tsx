@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/sidebar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
+import { useWallet } from "@/hooks/use-wallet"
 
 // This is sample data for the sidebar
 const data = {
@@ -57,14 +58,11 @@ const data = {
     title: "Desktop (Online)",
     status: "online",
   },
-  user: {
-    address: "0x742d...4e89",
-    label: "Connect Wallet",
-  },
 }
 
 export function DashboardSidebar({ className, ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname()
+  const { walletAddress, isConnected, connectWallet, disconnectWallet } = useWallet()
 
   return (
     <Sidebar {...props} className={cn("py-sides", className)}>
@@ -141,34 +139,54 @@ export function DashboardSidebar({ className, ...props }: React.ComponentProps<t
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <Popover>
-                  <PopoverTrigger className="flex gap-0.5 w-full group cursor-pointer">
+                {isConnected && walletAddress ? (
+                  <Popover>
+                    <PopoverTrigger className="flex gap-0.5 w-full group cursor-pointer">
+                      <div className="shrink-0 flex size-14 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+                        <CreditCardIcon className="size-8" />
+                      </div>
+                      <div className="group/item pl-3 pr-1.5 pt-2 pb-1.5 flex-1 flex bg-sidebar-accent hover:bg-sidebar-accent-active/75 items-center rounded group-data-[state=open]:bg-sidebar-accent-active group-data-[state=open]:hover:bg-sidebar-accent-active group-data-[state=open]:text-sidebar-accent-foreground">
+                        <div className="grid flex-1 text-left text-sm leading-tight">
+                          <span className="truncate text-xl font-display">
+                            {`${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`}
+                          </span>
+                          <span className="truncate text-xs uppercase opacity-50 group-hover/item:opacity-100 font-mono">
+                            Connected
+                          </span>
+                        </div>
+                        <DotsVerticalIcon className="ml-auto size-4" />
+                      </div>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-56 p-0" side="bottom" align="end" sideOffset={4}>
+                      <div className="flex flex-col">
+                        <button
+                          onClick={() => disconnectWallet()}
+                          className="flex items-center px-4 py-2 text-sm hover:bg-accent"
+                        >
+                          <CreditCardIcon className="mr-2 h-4 w-4" />
+                          Disconnect
+                        </button>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                ) : (
+                  <button
+                    onClick={() => connectWallet()}
+                    className="flex gap-0.5 w-full group cursor-pointer"
+                  >
                     <div className="shrink-0 flex size-14 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
                       <CreditCardIcon className="size-8" />
                     </div>
-                    <div className="group/item pl-3 pr-1.5 pt-2 pb-1.5 flex-1 flex bg-sidebar-accent hover:bg-sidebar-accent-active/75 items-center rounded group-data-[state=open]:bg-sidebar-accent-active group-data-[state=open]:hover:bg-sidebar-accent-active group-data-[state=open]:text-sidebar-accent-foreground">
+                    <div className="group/item pl-3 pr-1.5 pt-2 pb-1.5 flex-1 flex bg-sidebar-accent hover:bg-sidebar-accent-active/75 items-center rounded">
                       <div className="grid flex-1 text-left text-sm leading-tight">
-                        <span className="truncate text-xl font-display">{data.user.label}</span>
+                        <span className="truncate text-xl font-display">Connect Wallet</span>
                         <span className="truncate text-xs uppercase opacity-50 group-hover/item:opacity-100 font-mono">
-                          {data.user.address}
+                          Not Connected
                         </span>
                       </div>
-                      <DotsVerticalIcon className="ml-auto size-4" />
                     </div>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-56 p-0" side="bottom" align="end" sideOffset={4}>
-                    <div className="flex flex-col">
-                      <button className="flex items-center px-4 py-2 text-sm hover:bg-accent">
-                        <CreditCardIcon className="mr-2 h-4 w-4" />
-                        Wallet Settings
-                      </button>
-                      <button className="flex items-center px-4 py-2 text-sm hover:bg-accent">
-                        <GearIcon className="mr-2 h-4 w-4" />
-                        Preferences
-                      </button>
-                    </div>
-                  </PopoverContent>
-                </Popover>
+                  </button>
+                )}
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
