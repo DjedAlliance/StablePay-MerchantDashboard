@@ -8,6 +8,7 @@ import GearIcon from "@/components/icons/gear"
 import ProcessorIcon from "@/components/icons/proccesor"
 import BoomIcon from "@/components/icons/boom"
 import { useTransactions } from "@/hooks/use-transactions"
+import { useWallet } from "@/hooks/use-wallet"
 import mockDataJson from "@/mock.json"
 import type { MockData } from "@/types/dashboard"
 
@@ -21,7 +22,8 @@ const iconMap = {
 }
 
 export default function DashboardOverview() {
-  const { transactions, hasFetched } = useTransactions();
+  const { walletAddress } = useWallet()
+  const { transactions, hasFetched } = useTransactions(walletAddress);
 
   // Calculate real stats from transactions
   const totalTransactions = transactions.length;
