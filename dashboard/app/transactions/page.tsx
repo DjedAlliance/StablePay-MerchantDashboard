@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import DashboardPageLayout from "@/components/dashboard/layout"
 import CreditCardIcon from "@/components/icons/credit-card"
-import { useTransactions } from "@/hooks/use-transactions"
+import { useTransactions } from "@/contexts/TransactionContext"
 
 // Helper function to format address
 const formatAddress = (address: string) => {
@@ -27,6 +27,12 @@ export default function TransactionsPage() {
   const { transactions, loading, error, hasFetched, fetchTransactions, clearCache } = useTransactions();
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+
+  console.log('TransactionsPage render:', { 
+    transactionsCount: transactions.length, 
+    loading, 
+    hasFetched 
+  });
 
   const handleRowClick = (transaction: (typeof transactions)[0]) => {
     setSelectedTransaction(transaction)

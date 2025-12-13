@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import mockDataJson from "@/mock.json";
 import { Bullet } from "@/components/ui/bullet";
 import type { MockData, TimePeriod } from "@/types/dashboard";
+import { TransactionEvent } from "@/lib/transaction-service";
 
 const mockData = mockDataJson as MockData;
 
@@ -38,7 +39,54 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-export default function DashboardChart() {
+interface DashboardChartProps {
+  transactions?: TransactionEvent[];
+  hasCachedData?: boolean;
+}
+
+// Generate chart data from real transactions
+function generateChartData(transactions: TransactionEvent[], period: TimePeriod): ChartDataPoint[] {
+  if (transactions.length === 0) {
+    return [];
+  }
+
+  // Group transactions by date
+  const grouped = new Map<string, { revenue: number; count: number }>();
+
+  transactions.forEach(tx => {
+    const date = new Date(Number(tx.blockNumber) * 1000); // Approximate timestamp from block number
+    let dateKey: string;
+
+    if (period === 'week') {
+      // Format as MM/DD
+      dateKey = `${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`;
+    } else if (period === 'month') {
+      // Format as Month name (first 3 letters)
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      dateKey = monthNames[date.getMonth()];
+    } else {
+      // Format as full year
+      dateKey = date.getFullYear().toString();
+    }
+
+    const existing = grouped.get(dateKey) || { revenue: 0, count: 0 };
+    existing.revenue += parseFloat(tx.amountBC);
+    existing.count += 1;
+    grouped.set(dateKey, existing);
+  });
+
+  // Convert to chart data
+  const chartData: ChartDataPoint[] = Array.from(grouped.entries()).map(([date, data]) => ({
+    date,
+    revenue: Math.round(data.revenue * 100000), // Scale for better visualization
+    transactions: data.count * 50000, // Scale for better visualization
+    fees: Math.round(data.revenue * 10000), // Approximate fees
+  }));
+
+  return chartData.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+export default function DashboardChart({ transactions = [], hasCachedData = false }: DashboardChartProps) {
   const [activeTab, setActiveTab] = React.useState<TimePeriod>("week");
 
   const handleTabChange = (value: string) => {
@@ -200,13 +248,19 @@ export default function DashboardChart() {
         </div>
       </div>
       <TabsContent value="week" className="space-y-4">
-        {renderChart(mockData.chartData.week)}
+        {hasCachedData && transactions.length > 0
+          ? renderChart(generateChartData(transactions, "week"))
+          : renderChart(mockData.chartData.week)}
       </TabsContent>
       <TabsContent value="month" className="space-y-4">
-        {renderChart(mockData.chartData.month)}
+        {hasCachedData && transactions.length > 0
+          ? renderChart(generateChartData(transactions, "month"))
+          : renderChart(mockData.chartData.month)}
       </TabsContent>
       <TabsContent value="year" className="space-y-4">
-        {renderChart(mockData.chartData.year)}
+        {hasCachedData && transactions.length > 0
+          ? renderChart(generateChartData(transactions, "year"))
+          : renderChart(mockData.chartData.year)}
       </TabsContent>
     </Tabs>
   );
