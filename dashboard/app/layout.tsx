@@ -36,7 +36,8 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <head>
-        <link rel="preload" href="/fonts/Rebels-Fett.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+        <link rel="preload" href={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ''}/fonts/Rebels-Fett.woff2`} as="font" type="font/woff2" crossOrigin="anonymous" />
+         <link rel="icon" href={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ''}/favicon.svg`} type="image/svg+xml" />
       </head>
       <body className={`${rebelGrotesk.variable} ${robotoMono.variable} antialiased`}>
         <Providers>

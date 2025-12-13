@@ -9,7 +9,7 @@ export function MobileHeader() {
           <div className="flex items-center gap-2">
             <div className="h-8 w-16 flex items-center justify-center">
               <Image
-                src="/StablePay.svg"
+                src={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ''}/StablePay.svg`}
                 alt="StablePay Logo"
                 width={32}
                 height={32}
