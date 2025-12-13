@@ -1,100 +1,57 @@
-# Workflow for building and deploying a Next.js site to GitHub Pages
 name: Deploy Next.js site to Pages
 
 on:
-  # Runs on pushes targeting the default branch
   push:
     branches: ["main"]
-
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# Allow only one concurrent deployment
 concurrency:
   group: "pages"
   cancel-in-progress: false
 
 jobs:
-  # Build job
   build:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./dashboard 
+        working-directory: ./dashboard # All commands run inside 'dashboard' folder
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Detect package manager
-        id: detect-package-manager
-        run: |
-          if [ -f "pnpm-lock.yaml" ]; then
-            echo "manager=pnpm" >> $GITHUB_OUTPUT
-            echo "command=install" >> $GITHUB_OUTPUT
-            echo "runner=pnpm" >> $GITHUB_OUTPUT
-            exit 0
-          elif [ -f "yarn.lock" ]; then
-            echo "manager=yarn" >> $GITHUB_OUTPUT
-            echo "command=install" >> $GITHUB_OUTPUT
-            echo "runner=yarn" >> $GITHUB_OUTPUT
-            exit 0
-          elif [ -f "package.json" ]; then
-            echo "manager=npm" >> $GITHUB_OUTPUT
-            echo "command=ci" >> $GITHUB_OUTPUT
-            echo "runner=npx --no-install" >> $GITHUB_OUTPUT
-            exit 0
-          else
-            echo "Unable to determine package manager"
-            exit 1
-          fi
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: ${{ steps.detect-package-manager.outputs.manager }}
-          cache-dependency-path: dashboard/pnpm-lock.yaml # Explicit path for caching
-
+      # 1. Explicitly Install pnpm (Fixes the "Unable to locate" error)
       - name: Setup pnpm
-        if: steps.detect-package-manager.outputs.manager == 'pnpm'
         uses: pnpm/action-setup@v3
         with:
           version: 8
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
+      # 2. Setup Node.js
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          static_site_generator: next
+          node-version: "20"
+          cache: 'pnpm'
+          cache-dependency-path: dashboard/pnpm-lock.yaml
 
-      - name: Restore cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            dashboard/.next/cache
-          # Updated to look inside 'dashboard/' folder for lockfiles
-          key: ${{ runner.os }}-nextjs-${{ hashFiles('dashboard/**/package-lock.json', 'dashboard/**/yarn.lock', 'dashboard/**/pnpm-lock.yaml') }}-${{ hashFiles('dashboard/**.[jt]s', 'dashboard/**.[jt]sx') }}
-          restore-keys: |
-            ${{ runner.os }}-nextjs-${{ hashFiles('dashboard/**/package-lock.json', 'dashboard/**/yarn.lock', 'dashboard/**/pnpm-lock.yaml') }}-
-
+      # 3. Install Dependencies
       - name: Install dependencies
-        run: ${{ steps.detect-package-manager.outputs.manager }} ${{ steps.detect-package-manager.outputs.command }}
+        run: pnpm install
 
+      # 4. Build
       - name: Build with Next.js
-        run: ${{ steps.detect-package-manager.outputs.runner }} run build
+        run: pnpm run build
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./dashboard/out 
+          path: ./dashboard/out
 
-  # Deployment job
   deploy:
     environment:
       name: github-pages
