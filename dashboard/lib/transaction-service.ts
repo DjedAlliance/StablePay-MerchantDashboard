@@ -29,12 +29,21 @@ export class TransactionService {
         return `0x${cleanAddress}`;
     };
 
-    async fetchStableCoinPurchases(merchantAddress?: string): Promise<TransactionEvent[]> {
+    /**
+     * Fetches StableCoin purchase events from the blockchain
+     * @param merchantAddress - Optional merchant wallet address to filter transactions (as receiver)
+     * @param startFromBlock - Optional starting block number for incremental fetching
+     * @returns Array of formatted transaction events
+     */
+    async fetchStableCoinPurchases(merchantAddress?: string, startFromBlock?: bigint): Promise<TransactionEvent[]> {
         try {
             const currentBlock = await this.publicClient.getBlockNumber();
-            const startBlock = BigInt(6000000);
+            // Use provided startFromBlock or default to 6000000
+            const startBlock = startFromBlock || BigInt(6000000);
             const maxBlockRange = BigInt(49999);
             let allEvents: any[] = [];
+
+            console.log(`Fetching transactions from block ${startBlock} to ${currentBlock}${merchantAddress ? ` for merchant ${merchantAddress}` : ''}`);
 
             for (let fromBlock = startBlock; fromBlock <= currentBlock; fromBlock += maxBlockRange) {
                 const toBlock = fromBlock + maxBlockRange > currentBlock ? currentBlock : fromBlock + maxBlockRange;
@@ -45,8 +54,8 @@ export class TransactionService {
                     address: getCurrentContractAddress() as `0x${string}`,
                     event: parseAbiItem('event BoughtStableCoins(address indexed buyer, address indexed receiver, uint256 amountSC, uint256 amountBC)'),
                     args: merchantAddress ? {
-                      receiver: merchantAddress
-                    }as any:undefined,
+                      receiver: merchantAddress as `0x${string}`
+                    } : undefined,
                     fromBlock,
                     toBlock
                   });
