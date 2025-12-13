@@ -24,7 +24,7 @@ export default function DashboardOverview() {
   // Calculate real stats from transactions (works with cached or fresh data)
   const totalTransactions = transactions.length;
   const totalRevenue = transactions.reduce((sum, tx) => sum + parseFloat(tx.amountBC || "0"), 0);
-  const successRate = totalTransactions > 0 ? 100 : 0; // All blockchain transactions are successful
+  const successRate = totalTransactions > 0 ? 100 : undefined; // All blockchain transactions are successful
   const failedTransactions = 0; // No failed transactions in blockchain data
   const pendingTransactions = 0; // No pending transactions in blockchain data
 
@@ -53,7 +53,7 @@ export default function DashboardOverview() {
     },
     {
       label: "SUCCESS RATE",
-      value: hasFetched ? `${successRate}%` : "T/A",
+      value: (hasFetched && successRate !== undefined) ? `${successRate}%` : "T/A",
       description: hasFetched ? "PAYMENT SUCCESS" : "Fetch transactions for data",
       icon: "boom" as keyof typeof iconMap,
       intent: "positive" as const,
@@ -73,7 +73,6 @@ export default function DashboardOverview() {
       intent: "neutral" as const,
     },
   ];
-  console.log("Rendering stats:", stats)
   return (
     <DashboardPageLayout
       header={{

@@ -52,48 +52,66 @@ function generateChartData(transactions: TransactionEvent[], period: TimePeriod)
   const now = new Date();
   const groupedData: Record<string, { revenue: number; count: number }> = {};
 
-  // Determine date range based on period
-  let daysToShow: number;
-  let dateFormat: (date: Date) => string;
-
-  switch (period) {
-    case "week":
-      daysToShow = 7;
-      dateFormat = (d) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
-      break;
-    case "month":
-      daysToShow = 30;
-      dateFormat = (d) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
-      break;
-    case "year":
-      daysToShow = 365;
-      dateFormat = (d) => d.toLocaleString("en-US", { month: "short" });
-      break;
-  }
-
-  // Initialize date buckets
-  for (let i = daysToShow - 1; i >= 0; i--) {
-    const date = new Date(now);
-    date.setDate(date.getDate() - i);
-    const key = dateFormat(date);
-    if (!groupedData[key]) {
-      groupedData[key] = { revenue: 0, count: 0 };
-    }
-  }
-
-  // Group transactions by date
-  transactions.forEach((tx) => {
-    const txDate = new Date(Number(tx.timestamp) * 1000);
-    const daysDiff = Math.floor((now.getTime() - txDate.getTime()) / (1000 * 60 * 60 * 24));
-    
-    if (daysDiff < daysToShow) {
-      const key = dateFormat(txDate);
-      if (groupedData[key]) {
-        groupedData[key].revenue += parseFloat(tx.amountBC || "0");
-        groupedData[key].count += 1;
+  if (period === "year") {
+    const monthsToShow = 12;
+    for (let i = monthsToShow - 1; i >= 0; i--) {
+      const date = new Date(now);
+      date.setMonth(date.getMonth() - i);
+      const key = date.toLocaleString("en-US", { month: "short" });
+      if (!groupedData[key]) {
+        groupedData[key] = { revenue: 0, count: 0 };
       }
     }
-  });
+
+    transactions.forEach((tx) => {
+      if (!tx.timestamp) return;
+      const txDate = new Date(Number(tx.timestamp) * 1000);
+      
+      const monthDiff = (now.getFullYear() - txDate.getFullYear()) * 12 + (now.getMonth() - txDate.getMonth());
+      
+      if (monthDiff >= 0 && monthDiff < monthsToShow) {
+        const key = txDate.toLocaleString("en-US", { month: "short" });
+        if (groupedData[key]) {
+          groupedData[key].revenue += parseFloat(tx.amountBC || "0");
+          groupedData[key].count += 1;
+        }
+      }
+    });
+  } else {
+    let daysToShow: number;
+    let dateFormat: (date: Date) => string;
+
+    if (period === "week") {
+      daysToShow = 7;
+      dateFormat = (d) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+    } else {
+      daysToShow = 30;
+      dateFormat = (d) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+    }
+
+    for (let i = daysToShow - 1; i >= 0; i--) {
+      const date = new Date(now);
+      date.setDate(date.getDate() - i);
+      const key = dateFormat(date);
+      if (!groupedData[key]) {
+        groupedData[key] = { revenue: 0, count: 0 };
+      }
+    }
+
+    transactions.forEach((tx) => {
+      if (!tx.timestamp) return;
+      const txDate = new Date(Number(tx.timestamp) * 1000);
+      const daysDiff = Math.floor((now.getTime() - txDate.getTime()) / (1000 * 60 * 60 * 24));
+      
+      if (daysDiff >= 0 && daysDiff < daysToShow) {
+        const key = dateFormat(txDate);
+        if (groupedData[key]) {
+          groupedData[key].revenue += parseFloat(tx.amountBC || "0");
+          groupedData[key].count += 1;
+        }
+      }
+    });
+  }
 
   // Convert to chart data format
   return Object.entries(groupedData).map(([date, data]) => ({

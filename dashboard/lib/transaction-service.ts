@@ -11,7 +11,7 @@ export interface TransactionEvent {
     amountBC: string;
     blockNumber: bigint;
     transactionHash: string;
-    timestamp?: Date;
+    timestamp?: number;
 }
 
 export class TransactionService {
@@ -55,7 +55,7 @@ export class TransactionService {
 
             console.log("Total events found:", allEvents.length);
 
-            const formattedEvents: TransactionEvent[] = allEvents.map(event => {
+            const formattedEvents: TransactionEvent[] = await Promise.all(allEvents.map(async event => {
                 // Split the data (remove 0x prefix first)
                 const rawData = event.data.slice(2); // Remove '0x'
                 const amountSCHex = '0x' + rawData.slice(0, 64);  // First 32 bytes
@@ -65,15 +65,18 @@ export class TransactionService {
                 console.log('SC hex:', amountSCHex);  // Should be like 0x000...03e8
                 console.log('BC hex:', amountBCHex);  // Should be like 0x000...79cf
 
+                const block = await this.publicClient.getBlock({ blockNumber: event.blockNumber });
+
                 return {
                     buyer: this.formatAddress(event.topics[1]),
                     receiver: this.formatAddress(event.topics[2]),
                     amountSC: (parseInt(amountSCHex, 16) / 1000000).toString(),  // Convert to SC
                     amountBC: formatUnits(BigInt(amountBCHex), 18),             // Convert to ETH
                     blockNumber: event.blockNumber,
-                    transactionHash: event.transactionHash
+                    transactionHash: event.transactionHash,
+                    timestamp: Number(block.timestamp)
                 };
-            });
+            }));
 
             return formattedEvents;
         } catch (err) {
