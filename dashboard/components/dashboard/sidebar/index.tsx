@@ -1,15 +1,16 @@
 "use client"
 
 import type * as React from "react"
-import Link from "next/link" // Added Link import for proper Next.js navigation
+import Link from "next/link"
 import Image from "next/image"
-import BracketsIcon from "@/components/icons/brackets" // Fixed icon imports to use individual file paths
+import BracketsIcon from "@/components/icons/brackets"
 import GearIcon from "@/components/icons/gear"
 import DotsVerticalIcon from "@/components/icons/dots-vertical"
 import { Bullet } from "@/components/ui/bullet"
 import LockIcon from "@/components/icons/lock"
 import CreditCardIcon from "@/components/icons/credit-card"
 import { usePathname } from "next/navigation"
+import { useState, useEffect } from "react" 
 
 import {
   Sidebar,
@@ -29,7 +30,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils"
 import { useWallet } from "@/hooks/use-wallet"
 
-// This is sample data for the sidebar
+
 const data = {
   navMain: [
     {
@@ -63,6 +64,14 @@ const data = {
 export function DashboardSidebar({ className, ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname()
   const { walletAddress, isConnected, connectWallet, disconnectWallet } = useWallet()
+
+
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
 
   return (
     <Sidebar {...props} className={cn("py-sides", className)}>
@@ -99,7 +108,7 @@ export function DashboardSidebar({ className, ...props }: React.ComponentProps<t
                   >
                     <SidebarMenuButton
                       asChild={!item.locked}
-                      isActive={pathname === item.url} // Use pathname to determine active state dynamically
+                      isActive={pathname === item.url}
                       disabled={item.locked}
                       className={cn("disabled:cursor-not-allowed", item.locked && "pointer-events-none")}
                     >
@@ -110,8 +119,6 @@ export function DashboardSidebar({ className, ...props }: React.ComponentProps<t
                         </div>
                       ) : (
                         <Link href={item.url}>
-                          {" "}
-                          {/* Changed from <a> to <Link> for proper Next.js navigation */}
                           <item.icon className="size-5" />
                           <span>{item.title}</span>
                         </Link>
@@ -139,7 +146,8 @@ export function DashboardSidebar({ className, ...props }: React.ComponentProps<t
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                {isConnected && walletAddress ? (
+                {/* --- ADDED FIX: Check mounted state before checking wallet --- */}
+                {mounted && isConnected && walletAddress ? (
                   <Popover>
                     <PopoverTrigger className="flex gap-0.5 w-full group cursor-pointer">
                       <div className="shrink-0 flex size-14 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
