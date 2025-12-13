@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { XAxis, YAxis, CartesianGrid, Area, AreaChart } from "recharts";
+import { Loader2 } from "lucide-react";
 
 import {
   ChartConfig,
@@ -13,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import mockDataJson from "@/mock.json";
 import { Bullet } from "@/components/ui/bullet";
 import type { MockData, TimePeriod } from "@/types/dashboard";
+import type { TransactionEvent } from "@/lib/transaction-service";
 
 const mockData = mockDataJson as MockData;
 
@@ -38,7 +40,12 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-export default function DashboardChart() {
+interface DashboardChartProps {
+  transactions?: TransactionEvent[];
+  isLoading?: boolean;
+}
+
+export default function DashboardChart({ transactions = [], isLoading = false }: DashboardChartProps) {
   const [activeTab, setActiveTab] = React.useState<TimePeriod>("week");
 
   const handleTabChange = (value: string) => {
@@ -46,6 +53,55 @@ export default function DashboardChart() {
       setActiveTab(value as TimePeriod);
     }
   };
+
+  // Process real transaction data into chart format
+  const processTransactionData = React.useMemo(() => {
+    if (!transactions || transactions.length === 0) {
+      // Return mock data if no transactions
+      return {
+        week: mockData.chartData.week,
+        month: mockData.chartData.month,
+        year: mockData.chartData.year,
+      };
+    }
+
+    // Group transactions by date
+    const groupedByDate: Record<string, { revenue: number; count: number; fees: number }> = {};
+
+    transactions.forEach((tx) => {
+      const date = tx.date || new Date().toISOString().split('T')[0];
+      if (!groupedByDate[date]) {
+        groupedByDate[date] = { revenue: 0, count: 0, fees: 0 };
+      }
+      const amount = parseFloat(tx.amountBC || '0');
+      groupedByDate[date].revenue += amount;
+      groupedByDate[date].count += 1;
+      // Estimate fees as 1% of transaction amount
+      groupedByDate[date].fees += amount * 0.01;
+    });
+
+    // Convert to array and sort by date
+    const sortedData = Object.entries(groupedByDate)
+      .map(([date, data]) => ({
+        date,
+        revenue: Math.round(data.revenue * 100) / 100,
+        transactions: data.count,
+        fees: Math.round(data.fees * 100) / 100,
+      }))
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    // Filter data based on time period
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const yearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+
+    return {
+      week: sortedData.filter(d => new Date(d.date) >= weekAgo),
+      month: sortedData.filter(d => new Date(d.date) >= monthAgo),
+      year: sortedData.filter(d => new Date(d.date) >= yearAgo),
+    };
+  }, [transactions]);
 
   const formatYAxisValue = (value: number) => {
     // Hide the "0" value by returning empty string
@@ -62,8 +118,25 @@ export default function DashboardChart() {
   };
 
   const renderChart = (data: ChartDataPoint[]) => {
+    // Show placeholder if no data
+    if (data.length === 0) {
+      return (
+        <div className="bg-accent rounded-lg p-8 flex items-center justify-center min-h-[300px]">
+          <div className="text-center text-muted-foreground">
+            <p className="mb-2">No transaction data available for this period</p>
+            <p className="text-sm">Fetch transactions to see the chart</p>
+          </div>
+        </div>
+      );
+    }
+
     return (
-      <div className="bg-accent rounded-lg p-3">
+      <div className="bg-accent rounded-lg p-3 relative">
+        {isLoading && (
+          <div className="absolute top-3 right-3 z-10">
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          </div>
+        )}
         <ChartContainer className="md:aspect-[3/1] w-full" config={chartConfig}>
           <AreaChart
             accessibilityLayer
@@ -200,13 +273,13 @@ export default function DashboardChart() {
         </div>
       </div>
       <TabsContent value="week" className="space-y-4">
-        {renderChart(mockData.chartData.week)}
+        {renderChart(processTransactionData.week)}
       </TabsContent>
       <TabsContent value="month" className="space-y-4">
-        {renderChart(mockData.chartData.month)}
+        {renderChart(processTransactionData.month)}
       </TabsContent>
       <TabsContent value="year" className="space-y-4">
-        {renderChart(mockData.chartData.year)}
+        {renderChart(processTransactionData.year)}
       </TabsContent>
     </Tabs>
   );

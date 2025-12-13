@@ -29,28 +29,46 @@ export class TransactionService {
         return `0x${cleanAddress}`;
     };
 
-    async fetchStableCoinPurchases(merchantAddress?: string): Promise<TransactionEvent[]> {
+    /**
+     * Fetch stablecoin purchase transactions filtered by merchant address
+     * @param merchantAddress - The merchant's wallet address to filter transactions (receiver)
+     * @param fromBlock - Optional starting block for incremental fetching
+     * @returns Array of transaction events
+     */
+    async fetchStableCoinPurchases(
+        merchantAddress?: string,
+        fromBlock?: bigint
+    ): Promise<TransactionEvent[]> {
         try {
             const currentBlock = await this.publicClient.getBlockNumber();
-            const startBlock = BigInt(6000000);
+            
+            // Start from provided block or default starting block
+            const startBlock = fromBlock || BigInt(6000000);
             const maxBlockRange = BigInt(49999);
             let allEvents: any[] = [];
 
-            for (let fromBlock = startBlock; fromBlock <= currentBlock; fromBlock += maxBlockRange) {
-                const toBlock = fromBlock + maxBlockRange > currentBlock ? currentBlock : fromBlock + maxBlockRange;
+            console.log(`Fetching from block ${startBlock} to ${currentBlock}`);
+            if (merchantAddress) {
+                console.log(`Filtering for merchant address: ${merchantAddress}`);
+            }
 
-                console.log(`Fetching blocks ${fromBlock} to ${toBlock}`);
+            for (let from = startBlock; from <= currentBlock; from += maxBlockRange) {
+                const to = from + maxBlockRange > currentBlock ? currentBlock : from + maxBlockRange;
+
+                console.log(`Fetching blocks ${from} to ${to}`);
 
                 const purchaseEvents = await this.publicClient.getLogs({
                     address: getCurrentContractAddress() as `0x${string}`,
                     event: parseAbiItem('event BoughtStableCoins(address indexed buyer, address indexed receiver, uint256 amountSC, uint256 amountBC)'),
                     args: merchantAddress ? {
-                      receiver: merchantAddress
-                    }as any:undefined,
-                    fromBlock,
-                    toBlock
-                  });
+                        receiver: merchantAddress as `0x${string}`
+                    } as any : undefined,
+                    fromBlock: from,
+                    toBlock: to
+                });
+                
                 allEvents = [...allEvents, ...purchaseEvents];
+                console.log(`Found ${purchaseEvents.length} events in this range (total: ${allEvents.length})`);
             }
 
             console.log("Total events found:", allEvents.length);
@@ -61,10 +79,6 @@ export class TransactionService {
                 const amountSCHex = '0x' + rawData.slice(0, 64);  // First 32 bytes
                 const amountBCHex = '0x' + rawData.slice(64);     // Second 32 bytes
 
-                // Debug
-                console.log('SC hex:', amountSCHex);  // Should be like 0x000...03e8
-                console.log('BC hex:', amountBCHex);  // Should be like 0x000...79cf
-
                 return {
                     buyer: this.formatAddress(event.topics[1]),
                     receiver: this.formatAddress(event.topics[2]),
@@ -74,6 +88,11 @@ export class TransactionService {
                     transactionHash: event.transactionHash
                 };
             });
+
+            // Sort by block number (oldest first)
+            formattedEvents.sort((a, b) => 
+                a.blockNumber < b.blockNumber ? -1 : a.blockNumber > b.blockNumber ? 1 : 0
+            );
 
             return formattedEvents;
         } catch (err) {
