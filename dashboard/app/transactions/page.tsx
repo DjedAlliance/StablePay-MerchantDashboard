@@ -24,7 +24,7 @@ const getRiskLevel = (amount: string) => {
 };
 
 export default function TransactionsPage() {
-  const { transactions, loading, error, hasFetched, fetchTransactions, clearCache } = useTransactions();
+  const { transactions, loading, error, hasFetched, fetchTransactions, fetchFreshData, clearCache, lastSyncedBlock } = useTransactions();
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
@@ -97,16 +97,18 @@ export default function TransactionsPage() {
               <div className="flex gap-2">
                 <Button 
                   variant="secondary" 
-                  onClick={fetchTransactions} 
+                  onClick={fetchFreshData} 
                   disabled={loading}
+                  title="Fetch only new transactions since last sync"
                 >
                   <RefreshCw className={`size-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                  {loading ? 'Loading...' : 'Refresh Data'}
+                  {loading ? 'Loading...' : 'Fetch Fresh Data'}
                 </Button>
                 <Button 
                   variant="outline" 
                   onClick={clearCache}
                   className="text-xs"
+                  title="Clear all cached transactions"
                 >
                   Clear Cache
                 </Button>
@@ -131,6 +133,11 @@ export default function TransactionsPage() {
               <div>
                 <div className="text-sm text-muted-foreground mb-2">TOTAL TRANSACTIONS</div>
                 <div className="text-4xl font-bold">{loading ? "..." : transactions.length}</div>
+                {lastSyncedBlock && (
+                  <div className="text-xs text-muted-foreground mt-1">
+                    Last synced: Block #{lastSyncedBlock.toString()}
+                  </div>
+                )}
               </div>
               <Shield className="size-8 text-foreground" />
             </div>
@@ -194,8 +201,27 @@ export default function TransactionsPage() {
                   </tr>
                 ) : transactions.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-6 py-8 text-center text-muted-foreground">
-                      {!hasFetched ? "Click 'See Transactions' to load blockchain data" : "No StableCoin purchase events found"}
+                    <td colSpan={8} className="px-6 py-12">
+                      <div className="text-center">
+                        <p className="text-muted-foreground mb-4">
+                          {!hasFetched ? "Click 'See Transactions' to load blockchain data" : "No StableCoin purchase events found for your wallet address"}
+                        </p>
+                        {hasFetched && (
+                          <div className="max-w-2xl mx-auto p-4 bg-yellow-500/10 border border-yellow-500/40 rounded-lg text-left">
+                            <p className="text-sm text-foreground mb-2">
+                              <strong>⚠️ No transactions found</strong>
+                            </p>
+                            <p className="text-sm text-muted-foreground mb-2">
+                              If your connected wallet does not have any transactions related to Djed stablecoins or StablePay SDK, you can:
+                            </p>
+                            <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1 ml-2">
+                              <li>Go to the <strong>merchant demo website</strong> and make a minimal transaction</li>
+                              <li>Visit <a href="https://mordor.djed.one" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">https://mordor.djed.one</a> to buy stablecoins</li>
+                              <li>After making a transaction, return here and click "Fetch Fresh Data" to see your transactions</li>
+                            </ul>
+                          </div>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ) : (

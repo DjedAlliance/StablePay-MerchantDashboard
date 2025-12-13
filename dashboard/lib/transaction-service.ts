@@ -29,12 +29,15 @@ export class TransactionService {
         return `0x${cleanAddress}`;
     };
 
-    async fetchStableCoinPurchases(merchantAddress?: string): Promise<TransactionEvent[]> {
+    async fetchStableCoinPurchases(merchantAddress?: string, startFromBlock?: bigint): Promise<TransactionEvent[]> {
         try {
             const currentBlock = await this.publicClient.getBlockNumber();
-            const startBlock = BigInt(6000000);
+            // Use provided startFromBlock or default to 6000000
+            const startBlock = startFromBlock || BigInt(6000000);
             const maxBlockRange = BigInt(49999);
             let allEvents: any[] = [];
+
+            console.log(`Fetching transactions from block ${startBlock} to ${currentBlock}${merchantAddress ? ` for merchant ${merchantAddress}` : ''}`);
 
             for (let fromBlock = startBlock; fromBlock <= currentBlock; fromBlock += maxBlockRange) {
                 const toBlock = fromBlock + maxBlockRange > currentBlock ? currentBlock : fromBlock + maxBlockRange;

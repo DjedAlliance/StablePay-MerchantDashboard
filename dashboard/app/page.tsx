@@ -82,8 +82,24 @@ export default function DashboardOverview() {
       {!hasFetched && (
         <div className="mb-6 p-4 bg-muted/50 border border-border/40 rounded-lg">
           <p className="text-sm text-muted-foreground">
-            💡 <strong>Note:</strong> Fetch transactions from the Transactions tab to get real-time analysis and statistics.
+            💡 <strong>Note:</strong> Connect your wallet and fetch transactions from the Transactions tab to get real-time analysis and statistics.
           </p>
+        </div>
+      )}
+      
+      {hasFetched && totalTransactions === 0 && (
+        <div className="mb-6 p-4 bg-yellow-500/10 border border-yellow-500/40 rounded-lg">
+          <p className="text-sm text-foreground mb-2">
+            <strong>⚠️ No transactions found for your wallet address</strong>
+          </p>
+          <p className="text-sm text-muted-foreground mb-2">
+            If your connected wallet does not have any transactions related to Djed stablecoins or StablePay SDK, you can:
+          </p>
+          <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1 ml-2">
+            <li>Go to the <strong>merchant demo website</strong> and make a minimal transaction</li>
+            <li>Visit <a href="https://mordor.djed.one" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">https://mordor.djed.one</a> to buy stablecoins</li>
+            <li>After making a transaction, return here and click "Fetch Fresh Data" to see your transactions on the dashboard</li>
+          </ul>
         </div>
       )}
 
