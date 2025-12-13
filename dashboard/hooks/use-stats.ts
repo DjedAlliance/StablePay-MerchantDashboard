@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { TransactionEvent } from '@/lib/transaction-service';
 
 // Cache key for stats in localStorage
@@ -45,14 +45,49 @@ const DEFAULT_STATS: PlatformStats = {
     pendingTransactions: 0,
 };
 
+// Load cached stats synchronously (only on client)
+function getInitialStats(): PlatformStats {
+    if (typeof window === 'undefined') {
+        return DEFAULT_STATS;
+    }
+    
+    try {
+        const cached = localStorage.getItem(STATS_CACHE_KEY);
+        if (cached) {
+            const { stats: cachedStats }: CachedStats = JSON.parse(cached);
+            return cachedStats;
+        }
+    } catch (err) {
+        console.warn('Failed to parse cached stats:', err);
+    }
+    
+    return DEFAULT_STATS;
+}
+
+// Check if we have cached data synchronously
+function hasInitialCache(): boolean {
+    if (typeof window === 'undefined') {
+        return false;
+    }
+    
+    try {
+        const cached = localStorage.getItem(STATS_CACHE_KEY);
+        return !!cached;
+    } catch {
+        return false;
+    }
+}
+
 export function useStats(transactions: TransactionEvent[], isFetching: boolean) {
+    // Always start with DEFAULT_STATS for SSR consistency
     const [stats, setStats] = useState<PlatformStats>(DEFAULT_STATS);
     const [hasCachedData, setHasCachedData] = useState(false);
     const [isHydrated, setIsHydrated] = useState(false);
 
-    // Load cached stats on mount (client-side only)
+    // Load cached data on mount (client-side only)
     useEffect(() => {
         setIsHydrated(true);
+        
         const cached = localStorage.getItem(STATS_CACHE_KEY);
         if (cached) {
             try {

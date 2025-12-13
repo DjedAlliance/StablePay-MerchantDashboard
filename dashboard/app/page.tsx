@@ -28,7 +28,7 @@ export default function DashboardOverview() {
   const statsDisplay = [
     {
       label: "TRANSACTIONS PROCESSED",
-      value: hasCachedData ? stats.transactionsProcessed.toString() : "T/A",
+      value: !isHydrated ? "..." : hasCachedData ? stats.transactionsProcessed.toString() : "T/A",
       description: hasCachedData ? "TOTAL TRANSACTIONS" : "Fetch transactions for data",
       icon: "gear" as keyof typeof iconMap,
       intent: "positive" as const,
@@ -36,7 +36,7 @@ export default function DashboardOverview() {
     },
     {
       label: "REVENUE GENERATED", 
-      value: hasCachedData ? `${stats.revenueGenerated.toFixed(4)} ETH` : "T/A",
+      value: !isHydrated ? "..." : hasCachedData ? `${stats.revenueGenerated.toFixed(4)} ETH` : "T/A",
       description: hasCachedData ? "TOTAL EARNINGS" : "Fetch transactions for data",
       icon: "proccesor" as keyof typeof iconMap,
       intent: "positive" as const,
@@ -44,21 +44,21 @@ export default function DashboardOverview() {
     },
     {
       label: "SUCCESS RATE",
-      value: hasCachedData ? `${stats.successRate}%` : "T/A", 
+      value: !isHydrated ? "..." : hasCachedData ? `${stats.successRate}%` : "T/A", 
       description: hasCachedData ? "PAYMENT SUCCESS" : "Fetch transactions for data",
       icon: "boom" as keyof typeof iconMap,
       intent: "positive" as const,
     },
     {
       label: "FAILED TRANSACTIONS",
-      value: hasCachedData ? stats.failedTransactions.toString() : "T/A",
+      value: !isHydrated ? "..." : hasCachedData ? stats.failedTransactions.toString() : "T/A",
       description: hasCachedData ? "NO FAILURES" : "Fetch transactions for data",
       icon: "lock" as keyof typeof iconMap,
       intent: stats.failedTransactions > 0 ? "negative" as const : "positive" as const,
     },
     {
       label: "PENDING TRANSACTIONS", 
-      value: hasCachedData ? stats.pendingTransactions.toString() : "T/A",
+      value: !isHydrated ? "..." : hasCachedData ? stats.pendingTransactions.toString() : "T/A",
       description: hasCachedData ? "NO PENDING" : "Fetch transactions for data",
       icon: "gear" as keyof typeof iconMap,
       intent: "neutral" as const,
