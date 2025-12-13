@@ -1,34 +1,30 @@
-import { useState, useEffect } from 'react';
-import { useAccount, useConnect, useDisconnect } from 'wagmi';
-import { injected } from 'wagmi/connectors';
+"use client"
+
+import { useAccount, useConnect, useDisconnect } from 'wagmi'
 
 export function useWallet() {
-    const { address, isConnected } = useAccount();
-    const { connect } = useConnect();
-    const { disconnect } = useDisconnect();
+  const { address, isConnected } = useAccount()
+  const { connectors, connect } = useConnect()
+  const { disconnect } = useDisconnect()
 
-    const [walletAddress, setWalletAddress] = useState<string | null>(null);
+  const connectWallet = () => {
+    
+    const metamask = connectors.find((c) => c.id === 'metaMask' || c.type === 'injected')
+    
+    
+    if (metamask) {
+      connect({ connector: metamask })
+    } else if (connectors.length > 0) {
+      connect({ connector: connectors[0] })
+    } else {
+      console.error("No wallet connector found")
+    }
+  }
 
-    useEffect(() => {
-        if (isConnected && address) {
-            setWalletAddress(address);
-        } else {
-            setWalletAddress(null);
-        }
-    }, [isConnected, address]);
-
-    const connectWallet = () => {
-        connect({ connector: injected() });
-    };
-
-    const disconnectWallet = () => {
-        disconnect();
-    };
-
-    return {
-        walletAddress,
-        isConnected,
-        connectWallet,
-        disconnectWallet,
-    };
+  return {
+    walletAddress: address,
+    isConnected,
+    connectWallet,
+    disconnectWallet: () => disconnect(),
+  }
 }

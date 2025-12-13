@@ -36,7 +36,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <head>
-        <link rel="preload" href="/fonts/Rebels-Fett.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+        
       </head>
       <body className={`${rebelGrotesk.variable} ${robotoMono.variable} antialiased`}>
         <Providers>
