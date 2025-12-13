@@ -1,7 +1,9 @@
 /** @type {import('next').NextConfig} */
+const isProd = process.env.NODE_ENV === 'production'
+
 const nextConfig = {
   output: "export",
-  basePath: "/StablePay-MerchantDashboard",
+  basePath: isProd ? "/StablePay-MerchantDashboard" : "",
   trailingSlash: true,
   typescript: {
     ignoreBuildErrors: true,
