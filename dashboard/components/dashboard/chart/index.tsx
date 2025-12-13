@@ -38,8 +38,90 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-export default function DashboardChart() {
+interface DashboardChartProps {
+  transactions?: any[];
+  hasFetched?: boolean;
+}
+
+// Generate chart data from real transactions
+function generateChartData(transactions: any[], period: TimePeriod): ChartDataPoint[] {
+  if (!transactions || transactions.length === 0) {
+    return [];
+  }
+
+  const now = Date.now();
+  const msPerDay = 24 * 60 * 60 * 1000;
+  
+  // Determine date range based on period
+  let daysToShow: number;
+  let dateFormat: Intl.DateTimeFormatOptions;
+  
+  switch (period) {
+    case 'week':
+      daysToShow = 7;
+      dateFormat = { weekday: 'short' };
+      break;
+    case 'month':
+      daysToShow = 30;
+      dateFormat = { day: 'numeric', month: 'short' };
+      break;
+    case 'year':
+      daysToShow = 365;
+      dateFormat = { month: 'short' };
+      break;
+  }
+
+  // Create buckets for each day/period
+  const buckets: Map<string, { revenue: number; count: number; fees: number }> = new Map();
+  
+  // Initialize buckets
+  for (let i = daysToShow - 1; i >= 0; i--) {
+    const date = new Date(now - i * msPerDay);
+    const dateKey = date.toLocaleDateString('en-US', dateFormat);
+    buckets.set(dateKey, { revenue: 0, count: 0, fees: 0 });
+  }
+
+  // Aggregate transactions into buckets
+  transactions.forEach(tx => {
+    const txDate = new Date(parseInt(tx.timestamp) * 1000);
+    const dateKey = txDate.toLocaleDateString('en-US', dateFormat);
+    
+    if (buckets.has(dateKey)) {
+      const bucket = buckets.get(dateKey)!;
+      const amount = parseFloat(tx.amountBC || '0');
+      bucket.revenue += amount;
+      bucket.count += 1;
+      bucket.fees += amount * 0.02; // Assume 2% fee
+    }
+  });
+
+  // Convert to chart data format
+  return Array.from(buckets.entries()).map(([date, data]) => ({
+    date,
+    revenue: Math.round(data.revenue * 100) / 100,
+    transactions: data.count,
+    fees: Math.round(data.fees * 100) / 100,
+  }));
+}
+
+export default function DashboardChart({ transactions = [], hasFetched = false }: DashboardChartProps) {
   const [activeTab, setActiveTab] = React.useState<TimePeriod>("week");
+  const [chartData, setChartData] = React.useState<Record<TimePeriod, ChartDataPoint[]>>({
+    week: [],
+    month: [],
+    year: [],
+  });
+
+  // Generate chart data from transactions
+  React.useEffect(() => {
+    if (hasFetched && transactions.length > 0) {
+      setChartData({
+        week: generateChartData(transactions, 'week'),
+        month: generateChartData(transactions, 'month'),
+        year: generateChartData(transactions, 'year'),
+      });
+    }
+  }, [transactions, hasFetched]);
 
   const handleTabChange = (value: string) => {
     if (value === "week" || value === "month" || value === "year") {
@@ -62,12 +144,15 @@ export default function DashboardChart() {
   };
 
   const renderChart = (data: ChartDataPoint[]) => {
+    // Use mock data if no real data available
+    const displayData = data.length > 0 ? data : (mockData.chartData[activeTab] || []);
+    
     return (
       <div className="bg-accent rounded-lg p-3">
         <ChartContainer className="md:aspect-[3/1] w-full" config={chartConfig}>
           <AreaChart
             accessibilityLayer
-            data={data}
+            data={displayData}
             margin={{
               left: -12,
               right: 12,
@@ -200,13 +285,13 @@ export default function DashboardChart() {
         </div>
       </div>
       <TabsContent value="week" className="space-y-4">
-        {renderChart(mockData.chartData.week)}
+        {renderChart(chartData.week)}
       </TabsContent>
       <TabsContent value="month" className="space-y-4">
-        {renderChart(mockData.chartData.month)}
+        {renderChart(chartData.month)}
       </TabsContent>
       <TabsContent value="year" className="space-y-4">
-        {renderChart(mockData.chartData.year)}
+        {renderChart(chartData.year)}
       </TabsContent>
     </Tabs>
   );
