@@ -8,12 +8,8 @@ import GearIcon from "@/components/icons/gear"
 import ProcessorIcon from "@/components/icons/proccesor"
 import BoomIcon from "@/components/icons/boom"
 import { useTransactions } from "@/hooks/use-transactions"
-import mockDataJson from "@/mock.json"
-import type { MockData } from "@/types/dashboard"
+import { useWallet } from "@/hooks/use-wallet"
 
-const mockData = mockDataJson as MockData
-
-// Icon mapping
 const iconMap = {
   gear: GearIcon,
   proccesor: ProcessorIcon,
@@ -22,15 +18,11 @@ const iconMap = {
 
 export default function DashboardOverview() {
   const { transactions, hasFetched } = useTransactions();
+  const { isConnected } = useWallet();
 
-  // Calculate real stats from transactions
   const totalTransactions = transactions.length;
-  const totalRevenue = transactions.reduce((sum, tx) => sum + parseFloat(tx.amountBC), 0);
-  const successRate = totalTransactions > 0 ? 100 : 0; // All transactions are successful in blockchain
-  const failedTransactions = 0; // No failed transactions in blockchain data
-  const pendingTransactions = 0; // No pending transactions in blockchain data
+  const successRate = totalTransactions > 0 ? 100 : 0;
 
-  // Use real data if available, otherwise show T/A
   const stats = [
     {
       label: "TRANSACTIONS PROCESSED",
@@ -40,14 +32,14 @@ export default function DashboardOverview() {
       intent: "positive" as const,
       direction: "up" as const,
     },
-            {
-              label: "REVENUE GENERATED", 
-              value: "T/A",
-              description: "Fetch transactions for data",
-              icon: "proccesor" as keyof typeof iconMap,
-              intent: "positive" as const,
-              direction: "up" as const,
-            },
+    {
+      label: "REVENUE GENERATED", 
+      value: "T/A",
+      description: "Fetch transactions for data",
+      icon: "proccesor" as keyof typeof iconMap,
+      intent: "positive" as const,
+      direction: "up" as const,
+    },
     {
       label: "SUCCESS RATE",
       value: hasFetched ? `${successRate}%` : "T/A", 
@@ -75,14 +67,23 @@ export default function DashboardOverview() {
     <DashboardPageLayout
       header={{
         title: "Overview",
-        description: hasFetched ? "Last updated: Real-time blockchain data" : "Fetch transactions to get analysis",
+        description: hasFetched ? "Real-time blockchain data" : "Connect wallet & fetch transactions",
         icon: BracketsIcon,
       }}
     >
-      {!hasFetched && (
+      {!isConnected && (
         <div className="mb-6 p-4 bg-muted/50 border border-border/40 rounded-lg">
           <p className="text-sm text-muted-foreground">
-            💡 <strong>Note:</strong> Fetch transactions from the Transactions tab to get real-time analysis and statistics.
+            💡 <strong>Connect your wallet</strong> and fetch transactions from the Transactions tab to see real-time statistics.
+          </p>
+        </div>
+      )}
+
+      {hasFetched && totalTransactions === 0 && (
+        <div className="mb-6 p-4 bg-yellow-500/10 border border-yellow-500/40 rounded-lg">
+          <p className="text-sm font-medium mb-2">⚠️ No transactions found for your wallet</p>
+          <p className="text-sm text-muted-foreground">
+            Visit <a href="https://mordor.djed.one" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">mordor.djed.one</a> to buy stablecoins, then return and click "Fetch Fresh Data".
           </p>
         </div>
       )}
