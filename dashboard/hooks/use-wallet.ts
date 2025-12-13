@@ -5,6 +5,11 @@ import { injected } from 'wagmi/connectors';
 // Store merchant address in localStorage
 const MERCHANT_ADDRESS_KEY = 'stablepay_merchant_address';
 
+/**
+ * Custom hook for managing wallet connection state
+ * Persists merchant address to localStorage for cross-session availability
+ * @returns Wallet connection state and control functions
+ */
 export function useWallet() {
     const { address, isConnected } = useAccount();
     const { connect } = useConnect();
@@ -48,7 +53,10 @@ export function useWallet() {
     };
 }
 
-// Helper function to get stored merchant address
+/**
+ * Retrieves the stored merchant address from localStorage
+ * @returns The stored merchant address or null if not found
+ */
 export function getStoredMerchantAddress(): string | null {
     return localStorage.getItem(MERCHANT_ADDRESS_KEY);
 }

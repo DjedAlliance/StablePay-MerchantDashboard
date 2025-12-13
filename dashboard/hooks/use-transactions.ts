@@ -6,12 +6,25 @@ import { getStoredMerchantAddress } from './use-wallet';
 const CACHE_KEY = 'stablepay_transactions';
 const LAST_SYNCED_BLOCK_KEY = 'stablepay_last_synced_block';
 
+interface SerializableTransactionEvent extends Omit<TransactionEvent, 'blockNumber'> {
+    blockNumber: string;
+}
+
 interface CachedData {
-    transactions: (Omit<TransactionEvent, 'blockNumber'> & { blockNumber: string })[];
+    transactions: SerializableTransactionEvent[];
     lastSyncedBlock: string;
     merchantAddress: string;
 }
 
+/**
+ * Custom hook for managing blockchain transactions with persistent caching
+ * Features:
+ * - Wallet-based filtering (merchant as receiver)
+ * - Persistent localStorage cache (no expiry)
+ * - Incremental fetching with lastSyncedBlock tracking
+ * - Automatic cache invalidation on merchant address change
+ * @returns Transaction state, fetch functions, and cache controls
+ */
 export function useTransactions() {
     const [transactions, setTransactions] = useState<TransactionEvent[]>([]);
     const [loading, setLoading] = useState(false);
@@ -45,7 +58,11 @@ export function useTransactions() {
                 }
             } catch (err) {
                 console.warn('Failed to parse cached transactions:', err);
-                localStorage.removeItem(CACHE_KEY);
+                try {
+                    localStorage.removeItem(CACHE_KEY);
+                } catch (storageErr) {
+                    console.error('Failed to clear corrupted cache:', storageErr);
+                }
             }
         }
     }, []);
@@ -117,16 +134,31 @@ export function useTransactions() {
                 : (lastSyncedBlock || BigInt(0)).toString();
 
             const cacheData: CachedData = {
-                transactions: serializableEvents as any,
+                transactions: serializableEvents,
                 lastSyncedBlock: newLastSyncedBlock,
                 merchantAddress: merchantAddress
             };
             
-            localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
-            console.log(`Cached ${allTransactions.length} total transactions, last synced block: ${newLastSyncedBlock}`);
+            try {
+                localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
+                console.log(`Cached ${allTransactions.length} total transactions, last synced block: ${newLastSyncedBlock}`);
+            } catch (storageErr) {
+                // Handle localStorage quota exceeded or other storage errors
+                console.error('Failed to cache transactions:', storageErr);
+                if (storageErr instanceof Error && storageErr.name === 'QuotaExceededError') {
+                    console.warn('LocalStorage quota exceeded. Clearing old cache...');
+                    try {
+                        localStorage.removeItem(CACHE_KEY);
+                        localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
+                    } catch (retryErr) {
+                        console.error('Failed to cache even after clearing:', retryErr);
+                    }
+                }
+            }
         } catch (err) {
             console.error('Error fetching transactions:', err);
-            setError(err instanceof Error ? err.message : 'Failed to fetch transactions');
+            const errorMessage = err instanceof Error ? err.message : 'Failed to fetch transactions';
+            setError(errorMessage);
         } finally {
             setLoading(false);
         }
@@ -138,11 +170,16 @@ export function useTransactions() {
     };
 
     const clearCache = () => {
-        localStorage.removeItem(CACHE_KEY);
-        setTransactions([]);
-        setLastSyncedBlock(null);
-        setHasFetched(false);
-        console.log('Cache cleared');
+        try {
+            localStorage.removeItem(CACHE_KEY);
+            setTransactions([]);
+            setLastSyncedBlock(null);
+            setHasFetched(false);
+            console.log('Cache cleared successfully');
+        } catch (err) {
+            console.error('Failed to clear cache:', err);
+            setError('Failed to clear cache. Please try again.');
+        }
     };
 
     return {

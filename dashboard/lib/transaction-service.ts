@@ -29,6 +29,12 @@ export class TransactionService {
         return `0x${cleanAddress}`;
     };
 
+    /**
+     * Fetches StableCoin purchase events from the blockchain
+     * @param merchantAddress - Optional merchant wallet address to filter transactions (as receiver)
+     * @param startFromBlock - Optional starting block number for incremental fetching
+     * @returns Array of formatted transaction events
+     */
     async fetchStableCoinPurchases(merchantAddress?: string, startFromBlock?: bigint): Promise<TransactionEvent[]> {
         try {
             const currentBlock = await this.publicClient.getBlockNumber();
@@ -48,8 +54,8 @@ export class TransactionService {
                     address: getCurrentContractAddress() as `0x${string}`,
                     event: parseAbiItem('event BoughtStableCoins(address indexed buyer, address indexed receiver, uint256 amountSC, uint256 amountBC)'),
                     args: merchantAddress ? {
-                      receiver: merchantAddress
-                    }as any:undefined,
+                      receiver: merchantAddress as `0x${string}`
+                    } : undefined,
                     fromBlock,
                     toBlock
                   });
