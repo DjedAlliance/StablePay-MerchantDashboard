@@ -1,6 +1,5 @@
 import { createPublicClient, http, formatUnits } from 'viem';
 import { sepolia } from 'viem/chains';
-
 import { getCurrentContractAddress } from './config';
 import { parseAbiItem } from 'viem';
 
@@ -13,6 +12,9 @@ export interface TransactionEvent {
     transactionHash: string;
     timestamp?: Date;
 }
+
+const DEFAULT_START_BLOCK = BigInt(6000000);
+const MAX_BLOCK_RANGE = BigInt(49999);
 
 export class TransactionService {
     private publicClient;
@@ -29,60 +31,57 @@ export class TransactionService {
         return `0x${cleanAddress}`;
     };
 
-    async fetchStableCoinPurchases(merchantAddress?: string): Promise<TransactionEvent[]> {
+    /**
+     * Fetch StableCoin purchase events from blockchain
+     * @param merchantAddress - Filter by receiver (merchant) address
+     * @param startFromBlock - Start block for incremental fetching
+     */
+    async fetchStableCoinPurchases(
+        merchantAddress?: string,
+        startFromBlock?: bigint
+    ): Promise<TransactionEvent[]> {
         try {
             const currentBlock = await this.publicClient.getBlockNumber();
-            const startBlock = BigInt(6000000);
-            const maxBlockRange = BigInt(49999);
-            let allEvents: any[] = [];
+            const startBlock = startFromBlock || DEFAULT_START_BLOCK;
+            const allEvents: any[] = [];
 
-            for (let fromBlock = startBlock; fromBlock <= currentBlock; fromBlock += maxBlockRange) {
-                const toBlock = fromBlock + maxBlockRange > currentBlock ? currentBlock : fromBlock + maxBlockRange;
-
-                console.log(`Fetching blocks ${fromBlock} to ${toBlock}`);
+            for (let fromBlock = startBlock; fromBlock <= currentBlock; fromBlock += MAX_BLOCK_RANGE) {
+                const toBlock = fromBlock + MAX_BLOCK_RANGE > currentBlock 
+                    ? currentBlock 
+                    : fromBlock + MAX_BLOCK_RANGE;
 
                 const purchaseEvents = await this.publicClient.getLogs({
                     address: getCurrentContractAddress() as `0x${string}`,
                     event: parseAbiItem('event BoughtStableCoins(address indexed buyer, address indexed receiver, uint256 amountSC, uint256 amountBC)'),
                     args: merchantAddress ? {
-                      receiver: merchantAddress
-                    }as any:undefined,
+                        receiver: merchantAddress as `0x${string}`
+                    } : undefined,
                     fromBlock,
                     toBlock
-                  });
-                allEvents = [...allEvents, ...purchaseEvents];
+                });
+                
+                allEvents.push(...purchaseEvents);
             }
 
-            console.log("Total events found:", allEvents.length);
-
-            const formattedEvents: TransactionEvent[] = allEvents.map(event => {
-                // Split the data (remove 0x prefix first)
-                const rawData = event.data.slice(2); // Remove '0x'
-                const amountSCHex = '0x' + rawData.slice(0, 64);  // First 32 bytes
-                const amountBCHex = '0x' + rawData.slice(64);     // Second 32 bytes
-
-                // Debug
-                console.log('SC hex:', amountSCHex);  // Should be like 0x000...03e8
-                console.log('BC hex:', amountBCHex);  // Should be like 0x000...79cf
+            return allEvents.map(event => {
+                const rawData = event.data.slice(2);
+                const amountSCHex = '0x' + rawData.slice(0, 64);
+                const amountBCHex = '0x' + rawData.slice(64);
 
                 return {
                     buyer: this.formatAddress(event.topics[1]),
                     receiver: this.formatAddress(event.topics[2]),
-                    amountSC: (parseInt(amountSCHex, 16) / 1000000).toString(),  // Convert to SC
-                    amountBC: formatUnits(BigInt(amountBCHex), 18),             // Convert to ETH
+                    amountSC: (parseInt(amountSCHex, 16) / 1000000).toString(),
+                    amountBC: formatUnits(BigInt(amountBCHex), 18),
                     blockNumber: event.blockNumber,
                     transactionHash: event.transactionHash
                 };
             });
-
-            return formattedEvents;
         } catch (err) {
             console.error("Error fetching events:", err);
-            console.log("Error message:", err instanceof Error ? err.message : String(err));
             throw err;
         }
     }
 }
 
-// Export singleton instance
 export const transactionService = new TransactionService();
