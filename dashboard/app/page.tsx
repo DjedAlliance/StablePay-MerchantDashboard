@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import DashboardPageLayout from "@/components/dashboard/layout"
 import DashboardStat from "@/components/dashboard/stat"
 import DashboardChart from "@/components/dashboard/chart"
@@ -20,8 +21,35 @@ const iconMap = {
   boom: BoomIcon,
 }
 
+// Stats cache key
+const STATS_CACHE_KEY = 'stablepay_stats_cache';
+
+interface CachedStats {
+  totalTransactions: number;
+  totalRevenue: number;
+  successRate: number;
+  failedTransactions: number;
+  pendingTransactions: number;
+  timestamp: number;
+}
+
 export default function DashboardOverview() {
-  const { transactions, hasFetched } = useTransactions();
+  const { transactions, hasFetched, loading } = useTransactions();
+  const [cachedStats, setCachedStats] = useState<CachedStats | null>(null);
+  const [isLoadingFresh, setIsLoadingFresh] = useState(false);
+
+  // Load cached stats on mount
+  useEffect(() => {
+    const cached = localStorage.getItem(STATS_CACHE_KEY);
+    if (cached) {
+      try {
+        const parsedStats: CachedStats = JSON.parse(cached);
+        setCachedStats(parsedStats);
+      } catch (err) {
+        console.warn('Failed to parse cached stats:', err);
+      }
+    }
+  }, []);
 
   // Calculate real stats from transactions
   const totalTransactions = transactions.length;
@@ -30,42 +58,83 @@ export default function DashboardOverview() {
   const failedTransactions = 0; // No failed transactions in blockchain data
   const pendingTransactions = 0; // No pending transactions in blockchain data
 
+  // Cache stats whenever transactions change
+  useEffect(() => {
+    if (hasFetched && transactions.length > 0) {
+      const stats: CachedStats = {
+        totalTransactions,
+        totalRevenue,
+        successRate,
+        failedTransactions,
+        pendingTransactions,
+        timestamp: Date.now()
+      };
+      localStorage.setItem(STATS_CACHE_KEY, JSON.stringify(stats));
+      setCachedStats(stats);
+      setIsLoadingFresh(false);
+    }
+  }, [transactions, hasFetched, totalTransactions, totalRevenue, successRate, failedTransactions, pendingTransactions]);
+
+  // Track when fresh data is being fetched
+  useEffect(() => {
+    if (loading && cachedStats) {
+      setIsLoadingFresh(true);
+    }
+  }, [loading, cachedStats]);
+
+  // Determine which stats to display (cached or fresh)
+  const displayStats = hasFetched ? {
+    totalTransactions,
+    totalRevenue,
+    successRate,
+    failedTransactions,
+    pendingTransactions
+  } : cachedStats || {
+    totalTransactions: 0,
+    totalRevenue: 0,
+    successRate: 0,
+    failedTransactions: 0,
+    pendingTransactions: 0
+  };
+
+  const hasAnyData = hasFetched || cachedStats !== null;
+
   // Use real data if available, otherwise show T/A
   const stats = [
     {
       label: "TRANSACTIONS PROCESSED",
-      value: hasFetched ? totalTransactions.toString() : "T/A",
-      description: hasFetched ? "THIS WEEK" : "Fetch transactions for data",
+      value: hasAnyData ? displayStats.totalTransactions.toString() : "T/A",
+      description: hasAnyData ? "THIS WEEK" : "Fetch transactions for data",
       icon: "gear" as keyof typeof iconMap,
       intent: "positive" as const,
       direction: "up" as const,
     },
-            {
-              label: "REVENUE GENERATED", 
-              value: "T/A",
-              description: "Fetch transactions for data",
-              icon: "proccesor" as keyof typeof iconMap,
-              intent: "positive" as const,
-              direction: "up" as const,
-            },
+    {
+      label: "REVENUE GENERATED", 
+      value: hasAnyData ? `${displayStats.totalRevenue.toFixed(2)} BC` : "T/A",
+      description: hasAnyData ? "TOTAL REVENUE" : "Fetch transactions for data",
+      icon: "proccesor" as keyof typeof iconMap,
+      intent: "positive" as const,
+      direction: "up" as const,
+    },
     {
       label: "SUCCESS RATE",
-      value: hasFetched ? `${successRate}%` : "T/A", 
-      description: hasFetched ? "PAYMENT SUCCESS" : "Fetch transactions for data",
+      value: hasAnyData ? `${displayStats.successRate}%` : "T/A", 
+      description: hasAnyData ? "PAYMENT SUCCESS" : "Fetch transactions for data",
       icon: "boom" as keyof typeof iconMap,
       intent: "positive" as const,
     },
     {
       label: "FAILED TRANSACTIONS",
-      value: "0",
-      description: "Fetch transactions for data",
+      value: hasAnyData ? displayStats.failedTransactions.toString() : "T/A",
+      description: hasAnyData ? "NO FAILURES" : "Fetch transactions for data",
       icon: "gear" as keyof typeof iconMap,
       intent: "negative" as const,
     },
     {
       label: "PENDING TRANSACTIONS", 
-      value: "0",
-      description: "Fetch transactions for data",
+      value: hasAnyData ? displayStats.pendingTransactions.toString() : "T/A",
+      description: hasAnyData ? "ALL COMPLETED" : "Fetch transactions for data",
       icon: "gear" as keyof typeof iconMap,
       intent: "neutral" as const,
     }
@@ -75,14 +144,26 @@ export default function DashboardOverview() {
     <DashboardPageLayout
       header={{
         title: "Overview",
-        description: hasFetched ? "Last updated: Real-time blockchain data" : "Fetch transactions to get analysis",
+        description: hasFetched 
+          ? "Last updated: Real-time blockchain data" 
+          : cachedStats 
+            ? `Cached data from ${new Date(cachedStats.timestamp).toLocaleString()}`
+            : "Fetch transactions to get analysis",
         icon: BracketsIcon,
       }}
     >
-      {!hasFetched && (
+      {!hasFetched && !cachedStats && (
         <div className="mb-6 p-4 bg-muted/50 border border-border/40 rounded-lg">
           <p className="text-sm text-muted-foreground">
             💡 <strong>Note:</strong> Fetch transactions from the Transactions tab to get real-time analysis and statistics.
+          </p>
+        </div>
+      )}
+
+      {isLoadingFresh && (
+        <div className="mb-6 p-4 bg-blue-500/10 border border-blue-500/40 rounded-lg">
+          <p className="text-sm text-blue-600 dark:text-blue-400">
+            🔄 <strong>Updating:</strong> Fetching latest data... (showing cached values)
           </p>
         </div>
       )}

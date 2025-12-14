@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import mockDataJson from "@/mock.json";
 import { Bullet } from "@/components/ui/bullet";
 import type { MockData, TimePeriod } from "@/types/dashboard";
+import { useTransactions } from "@/hooks/use-transactions";
 
 const mockData = mockDataJson as MockData;
 
@@ -40,11 +41,77 @@ const chartConfig = {
 
 export default function DashboardChart() {
   const [activeTab, setActiveTab] = React.useState<TimePeriod>("week");
+  const { transactions, hasFetched } = useTransactions();
 
   const handleTabChange = (value: string) => {
     if (value === "week" || value === "month" || value === "year") {
       setActiveTab(value as TimePeriod);
     }
+  };
+
+  // Transform transaction data into chart format
+  const transformToChartData = (period: TimePeriod): ChartDataPoint[] => {
+    if (!hasFetched || transactions.length === 0) {
+      return mockData.chartData[period];
+    }
+
+    const now = new Date();
+    const dataPoints: Map<string, { revenue: number; count: number; fees: number }> = new Map();
+
+    // Determine date range and grouping based on period
+    let daysToInclude = 7;
+    let dateFormat: (date: Date) => string;
+
+    if (period === "week") {
+      daysToInclude = 7;
+      dateFormat = (date: Date) => date.toLocaleDateString('en-US', { weekday: 'short' });
+    } else if (period === "month") {
+      daysToInclude = 30;
+      dateFormat = (date: Date) => date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    } else {
+      daysToInclude = 365;
+      dateFormat = (date: Date) => date.toLocaleDateString('en-US', { month: 'short' });
+    }
+
+    // Initialize all dates with zero values
+    for (let i = daysToInclude - 1; i >= 0; i--) {
+      const date = new Date(now);
+      date.setDate(date.getDate() - i);
+      const dateKey = dateFormat(date);
+
+      if (!dataPoints.has(dateKey)) {
+        dataPoints.set(dateKey, { revenue: 0, count: 0, fees: 0 });
+      }
+    }
+
+    // Group transactions by date
+    transactions.forEach(tx => {
+      const txDate = new Date();
+      const dateKey = dateFormat(txDate);
+
+      const existing = dataPoints.get(dateKey) || { revenue: 0, count: 0, fees: 0 };
+      const revenue = parseFloat(tx.amountBC);
+      const fees = revenue * 0.01; // Assume 1% fee
+
+      dataPoints.set(dateKey, {
+        revenue: existing.revenue + revenue,
+        count: existing.count + 1,
+        fees: existing.fees + fees
+      });
+    });
+
+    // Convert to array format
+    const result: ChartDataPoint[] = [];
+    dataPoints.forEach((value, date) => {
+      result.push({
+        date,
+        revenue: parseFloat(value.revenue.toFixed(4)),
+        transactions: value.count,
+        fees: parseFloat(value.fees.toFixed(4))
+      });
+    });
+
+    return result;
   };
 
   const formatYAxisValue = (value: number) => {
@@ -200,13 +267,13 @@ export default function DashboardChart() {
         </div>
       </div>
       <TabsContent value="week" className="space-y-4">
-        {renderChart(mockData.chartData.week)}
+        {renderChart(transformToChartData("week"))}
       </TabsContent>
       <TabsContent value="month" className="space-y-4">
-        {renderChart(mockData.chartData.month)}
+        {renderChart(transformToChartData("month"))}
       </TabsContent>
       <TabsContent value="year" className="space-y-4">
-        {renderChart(mockData.chartData.year)}
+        {renderChart(transformToChartData("year"))}
       </TabsContent>
     </Tabs>
   );
