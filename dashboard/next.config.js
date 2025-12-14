@@ -4,7 +4,7 @@ const isProd = process.env.NODE_ENV === 'production'
 const nextConfig = {
     output: 'export',
     basePath: isProd ? '/StablePay-MerchantDashboard' : '',
-    assetPrefix: isProd ? '/StablePay-MerchantDashboard/' : '',
+    assetPrefix: isProd ? '/StablePay-MerchantDashboard' : '',
     eslint: {
         ignoreDuringBuilds: true,
     },
@@ -16,4 +16,4 @@ const nextConfig = {
     },
 }
 
-export default nextConfig
+module.exports = nextConfig
