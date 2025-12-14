@@ -41,17 +41,14 @@ export default function DashboardOverview() {
 
   // Load cached stats on mount
   useEffect(() => {
-    const cached = localStorage.getItem(STATS_CACHE_KEY);
-    if (cached) {
-      try {
-        const parsedStats: CachedStats = JSON.parse(cached);
-        const isExpired = Date.now() - parsedStats.timestamp > STATS_CACHE_EXPIRY;
-        if (!isExpired) {
-          setCachedStats(parsedStats);
-        }
-      } catch (err) {
-        console.warn('Failed to parse cached stats:', err);
-      }
+    try {
+      const cached = localStorage.getItem(STATS_CACHE_KEY);
+      if (!cached) return;
+      const parsedStats: CachedStats = JSON.parse(cached);
+      const isExpired = Date.now() - parsedStats.timestamp > STATS_CACHE_EXPIRY;
+      if (!isExpired) setCachedStats(parsedStats);
+    } catch (err) {
+      console.warn('Failed to load cached stats:', err);
     }
   }, []);
 
@@ -64,7 +61,7 @@ export default function DashboardOverview() {
 
   // Cache stats whenever transactions change
   useEffect(() => {
-    if (hasFetched && transactions.length > 0) {
+    if (hasFetched) {
       const stats: CachedStats = {
         totalTransactions,
         totalRevenue,
@@ -73,8 +70,14 @@ export default function DashboardOverview() {
         pendingTransactions,
         timestamp: Date.now()
       };
-      localStorage.setItem(STATS_CACHE_KEY, JSON.stringify(stats));
-      setCachedStats(stats);
+      try {
+        localStorage.setItem(STATS_CACHE_KEY, JSON.stringify(stats));
+        setCachedStats(stats);
+      } catch (err) {
+        console.warn('Failed to persist cached stats:', err);
+        // Still keep in-memory cached stats for this session
+        setCachedStats(stats);
+      }
       setIsLoadingFresh(false);
     }
   }, [transactions, hasFetched, totalTransactions, totalRevenue, successRate, failedTransactions, pendingTransactions]);
@@ -163,7 +166,7 @@ export default function DashboardOverview() {
       {!hasFetched && !cachedStats && (
         <div className="mb-6 p-4 bg-muted/50 border border-border/40 rounded-lg">
           <p className="text-sm text-muted-foreground">
-            💡 <strong>Note:</strong> Fetch transactions from the Transactions tab to get real-time analysis and statistics.
+            <strong>Note:</strong> Fetch transactions from the Transactions tab to get real-time analysis and statistics.
           </p>
         </div>
       )}
@@ -171,7 +174,7 @@ export default function DashboardOverview() {
       {isLoadingFresh && (
         <div className="mb-6 p-4 bg-blue-500/10 border border-blue-500/40 rounded-lg">
           <p className="text-sm text-blue-600 dark:text-blue-400">
-            🔄 <strong>Updating:</strong> Fetching latest data... (showing cached values)
+            <strong>Updating:</strong> Fetching latest data... (showing cached values)
           </p>
         </div>
       )}
