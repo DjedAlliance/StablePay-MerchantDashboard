@@ -7,75 +7,81 @@ import BracketsIcon from "@/components/icons/brackets"
 import GearIcon from "@/components/icons/gear"
 import ProcessorIcon from "@/components/icons/proccesor"
 import BoomIcon from "@/components/icons/boom"
+import LockIcon from "@/components/icons/lock"
 import { useTransactions } from "@/hooks/use-transactions"
-import mockDataJson from "@/mock.json"
-import type { MockData } from "@/types/dashboard"
-
-const mockData = mockDataJson as MockData
 
 // Icon mapping
 const iconMap = {
   gear: GearIcon,
   proccesor: ProcessorIcon,
   boom: BoomIcon,
+  lock: LockIcon,
 }
 
 export default function DashboardOverview() {
-  const { transactions, hasFetched } = useTransactions();
+  const { transactions, loading, hasFetched } = useTransactions();
 
-  // Calculate real stats from transactions
+  // Calculate real stats from transactions (works with cached or fresh data)
   const totalTransactions = transactions.length;
-  const totalRevenue = transactions.reduce((sum, tx) => sum + parseFloat(tx.amountBC), 0);
-  const successRate = totalTransactions > 0 ? 100 : 0; // All transactions are successful in blockchain
+  const totalRevenue = transactions.reduce((sum, tx) => sum + parseFloat(tx.amountBC || "0"), 0);
+  const successRate = totalTransactions > 0 ? 100 : undefined; // All blockchain transactions are successful
   const failedTransactions = 0; // No failed transactions in blockchain data
   const pendingTransactions = 0; // No pending transactions in blockchain data
 
-  // Use real data if available, otherwise show T/A
+  // Format revenue with ETH
+  const formatRevenue = (amount: number) => {
+    return `${amount.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 })} ETH`;
+  };
+
+  // Stats use cached values immediately, show T/A only if never fetched
   const stats = [
     {
       label: "TRANSACTIONS PROCESSED",
-      value: hasFetched ? totalTransactions.toString() : "T/A",
-      description: hasFetched ? "THIS WEEK" : "Fetch transactions for data",
+      value: hasFetched ? totalTransactions.toLocaleString() : "T/A",
+      description: hasFetched ? "TOTAL COUNT" : "Fetch transactions for data",
       icon: "gear" as keyof typeof iconMap,
       intent: "positive" as const,
       direction: "up" as const,
     },
-            {
-              label: "REVENUE GENERATED", 
-              value: "T/A",
-              description: "Fetch transactions for data",
-              icon: "proccesor" as keyof typeof iconMap,
-              intent: "positive" as const,
-              direction: "up" as const,
-            },
+    {
+      label: "REVENUE (ETH)",
+      value: hasFetched ? formatRevenue(totalRevenue) : "T/A",
+      description: hasFetched ? "TOTAL EARNINGS" : "Fetch transactions for data",
+      icon: "proccesor" as keyof typeof iconMap,
+      intent: "positive" as const,
+      direction: "up" as const,
+    },
     {
       label: "SUCCESS RATE",
-      value: hasFetched ? `${successRate}%` : "T/A", 
+      value: (hasFetched && successRate !== undefined) ? `${successRate}%` : "T/A",
       description: hasFetched ? "PAYMENT SUCCESS" : "Fetch transactions for data",
       icon: "boom" as keyof typeof iconMap,
       intent: "positive" as const,
     },
     {
       label: "FAILED TRANSACTIONS",
-      value: "0",
-      description: "Fetch transactions for data",
-      icon: "gear" as keyof typeof iconMap,
+      value: hasFetched ? failedTransactions.toString() : "T/A",
+      description: hasFetched ? "NO FAILURES" : "Fetch transactions for data",
+      icon: "lock" as keyof typeof iconMap,
       intent: "negative" as const,
     },
     {
-      label: "PENDING TRANSACTIONS", 
-      value: "0",
-      description: "Fetch transactions for data",
+      label: "PENDING TRANSACTIONS",
+      value: hasFetched ? pendingTransactions.toString() : "T/A",
+      description: hasFetched ? "ALL CONFIRMED" : "Fetch transactions for data",
       icon: "gear" as keyof typeof iconMap,
       intent: "neutral" as const,
-    }
+    },
   ];
-
   return (
     <DashboardPageLayout
       header={{
         title: "Overview",
-        description: hasFetched ? "Last updated: Real-time blockchain data" : "Fetch transactions to get analysis",
+        description: loading 
+          ? "Updating data..." 
+          : hasFetched 
+            ? "Real-time blockchain data" 
+            : "Fetch transactions to get analysis",
         icon: BracketsIcon,
       }}
     >
@@ -83,6 +89,15 @@ export default function DashboardOverview() {
         <div className="mb-6 p-4 bg-muted/50 border border-border/40 rounded-lg">
           <p className="text-sm text-muted-foreground">
             💡 <strong>Note:</strong> Fetch transactions from the Transactions tab to get real-time analysis and statistics.
+          </p>
+        </div>
+      )}
+
+      {loading && hasFetched && (
+        <div className="mb-6 p-4 bg-primary/5 border border-primary/20 rounded-lg">
+          <p className="text-sm text-muted-foreground flex items-center gap-2">
+            <span className="inline-block w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            Refreshing data... Showing cached values.
           </p>
         </div>
       )}
@@ -102,7 +117,7 @@ export default function DashboardOverview() {
       </div>
 
       <div className="mb-6">
-        <DashboardChart />
+        <DashboardChart transactions={transactions} hasFetched={hasFetched} loading={loading} />
       </div>
     </DashboardPageLayout>
   )
