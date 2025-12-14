@@ -29,27 +29,27 @@ export class TransactionService {
         return `0x${cleanAddress}`;
     };
 
-    async fetchStableCoinPurchases(merchantAddress?: string): Promise<TransactionEvent[]> {
+    async fetchStableCoinPurchases(merchantAddress?: string, fromBlock?: bigint): Promise<TransactionEvent[]> {
         try {
             const currentBlock = await this.publicClient.getBlockNumber();
-            const startBlock = BigInt(6000000);
+            const startBlock = fromBlock || BigInt(6000000); // Use provided fromBlock or default to 6000000
             const maxBlockRange = BigInt(49999);
             let allEvents: any[] = [];
 
-            for (let fromBlock = startBlock; fromBlock <= currentBlock; fromBlock += maxBlockRange) {
-                const toBlock = fromBlock + maxBlockRange > currentBlock ? currentBlock : fromBlock + maxBlockRange;
+            for (let currentFromBlock = startBlock; currentFromBlock <= currentBlock; currentFromBlock += maxBlockRange) {
+                const toBlock = currentFromBlock + maxBlockRange > currentBlock ? currentBlock : currentFromBlock + maxBlockRange;
 
-                console.log(`Fetching blocks ${fromBlock} to ${toBlock}`);
+                console.log(`Fetching blocks ${currentFromBlock} to ${toBlock}`);
 
                 const purchaseEvents = await this.publicClient.getLogs({
                     address: getCurrentContractAddress() as `0x${string}`,
                     event: parseAbiItem('event BoughtStableCoins(address indexed buyer, address indexed receiver, uint256 amountSC, uint256 amountBC)'),
                     args: merchantAddress ? {
-                      receiver: merchantAddress
-                    }as any:undefined,
-                    fromBlock,
+                        receiver: merchantAddress
+                    } as any : undefined,
+                    fromBlock: currentFromBlock,
                     toBlock
-                  });
+                });
                 allEvents = [...allEvents, ...purchaseEvents];
             }
 
