@@ -10,6 +10,7 @@ import DashboardPageLayout from "@/components/dashboard/layout"
 import CreditCardIcon from "@/components/icons/credit-card"
 import { useTransactions } from "@/hooks/use-transactions"
 import { useWallet } from "@/hooks/use-wallet"
+import { TransactionEvent } from "@/lib/transaction-service"
 
 // Helper function to format address
 const formatAddress = (address: string) => {
@@ -26,8 +27,8 @@ const getRiskLevel = (amount: string) => {
 
 export default function TransactionsPage() {
   const { walletAddress, isConnected } = useWallet();
-  const { transactions, loading, error, hasFetched, lastSyncedBlock, fetchTransactions, clearCache } = useTransactions(walletAddress || undefined);
-  const [selectedTransaction, setSelectedTransaction] = useState<any>(null)
+  const { transactions, loading, error, hasFetched, lastSyncedBlock, fetchTransactions, clearCache, lastFetchTimestamp } = useTransactions(walletAddress || undefined);
+  const [selectedTransaction, setSelectedTransaction] = useState<TransactionEvent | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
   const handleRowClick = (transaction: (typeof transactions)[0]) => {
@@ -54,14 +55,15 @@ export default function TransactionsPage() {
           <div className="flex items-center gap-4">
             <span className="text-xs text-muted-foreground">
               LAST UPDATE:{" "}
-              {new Date().toLocaleString("en-US", {
+              {lastFetchTimestamp ? new Date(lastFetchTimestamp).toLocaleString("en-US", {
                 month: "2-digit",
                 day: "2-digit",
                 year: "numeric",
                 hour: "2-digit",
                 minute: "2-digit",
-                timeZone: "UTC",
-              })}{" "}
+                hour12: true, // Use AM/PM format
+              }) : 'N/A'}
+
               UTC
             </span>
             <Button variant="ghost" size="icon" className="size-8">
@@ -282,8 +284,8 @@ export default function TransactionsPage() {
         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
           <DialogContent className="max-w-2xl bg-card border-border/40">
             <DialogHeader className="relative">
-              <DialogTitle className="text-3xl font-display mb-2">{selectedTransaction?.merchant}</DialogTitle>
-              <p className="text-muted-foreground font-mono">{selectedTransaction?.id}</p>
+              <DialogTitle className="text-3xl font-display mb-2">Transaction Details</DialogTitle>
+              <p className="text-muted-foreground font-mono text-sm break-all">{selectedTransaction?.transactionHash}</p>
               <Button
                 variant="ghost"
                 size="icon"
@@ -299,42 +301,35 @@ export default function TransactionsPage() {
                 <div>
                   <div className="text-sm text-muted-foreground mb-2">STATUS</div>
                   <div className="flex items-center gap-2">
-                    <div
-                      className={`size-2 rounded-full ${selectedTransaction?.status === "completed"
-                        ? "bg-green-500"
-                        : selectedTransaction?.status === "pending"
-                          ? "bg-yellow-500"
-                          : "bg-red-500"
-                        }`}
-                    />
-                    <span className="uppercase text-lg">{selectedTransaction?.status}</span>
+                    <div className="size-2 rounded-full bg-green-500" />
+                    <span className="uppercase text-lg">Confirmed</span>
                   </div>
                 </div>
 
                 <div>
-                  <div className="text-sm text-muted-foreground mb-2">MISSIONS COMPLETED</div>
-                  <div className="text-2xl font-bold">{selectedTransaction?.amount}</div>
+                  <div className="text-sm text-muted-foreground mb-2">AMOUNT</div>
+                  <div className="text-2xl font-bold">{selectedTransaction?.amountSC} SC</div>
                 </div>
               </div>
 
               <div className="space-y-6">
                 <div>
-                  <div className="text-sm text-muted-foreground mb-2">LOCATION</div>
-                  <div className="text-lg">{selectedTransaction?.location}</div>
+                  <div className="text-sm text-muted-foreground mb-2">BLOCK NUMBER</div>
+                  <div className="text-lg">#{selectedTransaction?.blockNumber?.toString()}</div>
                 </div>
 
                 <div>
                   <div className="text-sm text-muted-foreground mb-2">RISK LEVEL</div>
                   <Badge
                     variant="secondary"
-                    className={`uppercase text-sm px-3 py-1 ${selectedTransaction?.risk === "high"
+                    className={`uppercase text-sm px-3 py-1 ${getRiskLevel(selectedTransaction?.amountSC || '0') === "high"
                       ? "bg-primary/20 text-primary border-primary/40"
-                      : selectedTransaction?.risk === "medium"
+                      : getRiskLevel(selectedTransaction?.amountSC || '0') === "medium"
                         ? "bg-muted text-muted-foreground"
-                        : "bg-red-500/20 text-red-500 border-red-500/40"
+                        : "bg-green-500/20 text-green-500 border-green-500/40"
                       }`}
                   >
-                    {selectedTransaction?.risk}
+                    {getRiskLevel(selectedTransaction?.amountSC || '0')}
                   </Badge>
                 </div>
               </div>

@@ -17,7 +17,8 @@ export function useTransactions(merchantAddress?: string) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [hasFetched, setHasFetched] = useState(false);
-    const [lastSyncedBlock, setLastSyncedBlock] = useState<bigint | null>(null);
+    const [lastSyncedBlock, setLastSyncedBlock] = useState<bigint>(BigInt(0));
+    const [lastFetchTimestamp, setLastFetchTimestamp] = useState<number | null>(null);
 
     // Generate wallet-specific cache key
     const getCacheKey = (address?: string) => {
@@ -31,10 +32,13 @@ export function useTransactions(merchantAddress?: string) {
 
         if (cached) {
             try {
-                const { transactions: cachedTransactions, lastSyncedBlock: cachedBlock, merchantAddress: cachedAddress }: CachedData = JSON.parse(cached);
+                const { transactions: cachedTransactions, lastSyncedBlock: cachedBlock, merchantAddress: cachedAddress, timestamp }: CachedData = JSON.parse(cached);
 
-                // Only use cache if it matches the current merchant address (or both are empty)
-                if (!merchantAddress || !cachedAddress || cachedAddress.toLowerCase() === merchantAddress.toLowerCase()) {
+                // Strict cache validation: Enforce exact address matching to prevent data leaks
+                const isAddressMatch = (!merchantAddress && !cachedAddress) ||
+                    (merchantAddress && cachedAddress && merchantAddress.toLowerCase() === cachedAddress.toLowerCase());
+
+                if (isAddressMatch) {
                     // Convert string blockNumber back to BigInt
                     const restoredTransactions = cachedTransactions.map(event => ({
                         ...event,
@@ -42,6 +46,7 @@ export function useTransactions(merchantAddress?: string) {
                     }));
                     setTransactions(restoredTransactions);
                     setLastSyncedBlock(BigInt(cachedBlock));
+                    setLastFetchTimestamp(timestamp || Date.now());
                     setHasFetched(true);
                 }
             } catch (err) {
@@ -81,6 +86,8 @@ export function useTransactions(merchantAddress?: string) {
 
             setTransactions(updatedTransactions);
             setHasFetched(true);
+            const now = Date.now();
+            setLastFetchTimestamp(now);
 
             // Update lastSyncedBlock to the highest block number
             if (updatedTransactions.length > 0) {
@@ -96,15 +103,16 @@ export function useTransactions(merchantAddress?: string) {
                     blockNumber: event.blockNumber.toString()
                 }));
 
-                const cacheData: CachedData = {
+                // Persist to cache (Append mode)
+                const cachePayload: CachedData = {
                     transactions: serializableEvents as any,
                     lastSyncedBlock: maxBlock.toString(),
                     merchantAddress: merchantAddress || '',
-                    timestamp: Date.now()
+                    timestamp: now
                 };
 
                 const cacheKey = getCacheKey(merchantAddress);
-                localStorage.setItem(cacheKey, JSON.stringify(cacheData));
+                localStorage.setItem(cacheKey, JSON.stringify(cachePayload));
             }
         } catch (err) {
             console.error('Error fetching transactions:', err);
@@ -118,17 +126,19 @@ export function useTransactions(merchantAddress?: string) {
         const cacheKey = getCacheKey(merchantAddress);
         localStorage.removeItem(cacheKey);
         setTransactions([]);
+        setLastSyncedBlock(BigInt(0));
+        setLastFetchTimestamp(null);
         setHasFetched(false);
-        setLastSyncedBlock(null);
     };
 
     return {
         transactions,
         loading,
         error,
-        hasFetched,
-        lastSyncedBlock,
         fetchTransactions,
-        clearCache
+        hasFetched,
+        clearCache,
+        lastSyncedBlock,
+        lastFetchTimestamp
     };
 }
