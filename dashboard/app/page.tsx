@@ -21,8 +21,9 @@ const iconMap = {
   boom: BoomIcon,
 }
 
-// Stats cache key
+// Stats cache key and expiry
 const STATS_CACHE_KEY = 'stablepay_stats_cache';
+const STATS_CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
 
 interface CachedStats {
   totalTransactions: number;
@@ -44,7 +45,10 @@ export default function DashboardOverview() {
     if (cached) {
       try {
         const parsedStats: CachedStats = JSON.parse(cached);
-        setCachedStats(parsedStats);
+        const isExpired = Date.now() - parsedStats.timestamp > STATS_CACHE_EXPIRY;
+        if (!isExpired) {
+          setCachedStats(parsedStats);
+        }
       } catch (err) {
         console.warn('Failed to parse cached stats:', err);
       }
@@ -77,8 +81,12 @@ export default function DashboardOverview() {
 
   // Track when fresh data is being fetched
   useEffect(() => {
-    if (loading && cachedStats) {
-      setIsLoadingFresh(true);
+    if (loading) {
+      if (cachedStats) {
+        setIsLoadingFresh(true);
+      }
+    } else {
+      setIsLoadingFresh(false);
     }
   }, [loading, cachedStats]);
 
@@ -110,7 +118,7 @@ export default function DashboardOverview() {
       direction: "up" as const,
     },
     {
-      label: "REVENUE GENERATED", 
+      label: "REVENUE GENERATED",
       value: hasAnyData ? `${displayStats.totalRevenue.toFixed(2)} BC` : "T/A",
       description: hasAnyData ? "TOTAL REVENUE" : "Fetch transactions for data",
       icon: "proccesor" as keyof typeof iconMap,
@@ -119,7 +127,7 @@ export default function DashboardOverview() {
     },
     {
       label: "SUCCESS RATE",
-      value: hasAnyData ? `${displayStats.successRate}%` : "T/A", 
+      value: hasAnyData ? `${displayStats.successRate}%` : "T/A",
       description: hasAnyData ? "PAYMENT SUCCESS" : "Fetch transactions for data",
       icon: "boom" as keyof typeof iconMap,
       intent: "positive" as const,
@@ -132,7 +140,7 @@ export default function DashboardOverview() {
       intent: "negative" as const,
     },
     {
-      label: "PENDING TRANSACTIONS", 
+      label: "PENDING TRANSACTIONS",
       value: hasAnyData ? displayStats.pendingTransactions.toString() : "T/A",
       description: hasAnyData ? "ALL COMPLETED" : "Fetch transactions for data",
       icon: "gear" as keyof typeof iconMap,
@@ -144,9 +152,9 @@ export default function DashboardOverview() {
     <DashboardPageLayout
       header={{
         title: "Overview",
-        description: hasFetched 
-          ? "Last updated: Real-time blockchain data" 
-          : cachedStats 
+        description: hasFetched
+          ? "Last updated: Real-time blockchain data"
+          : cachedStats
             ? `Cached data from ${new Date(cachedStats.timestamp).toLocaleString()}`
             : "Fetch transactions to get analysis",
         icon: BracketsIcon,

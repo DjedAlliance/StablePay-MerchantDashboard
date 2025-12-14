@@ -17,6 +17,9 @@ import { useTransactions } from "@/hooks/use-transactions";
 
 const mockData = mockDataJson as MockData;
 
+// Fee percentage for revenue calculations
+const FEE_PERCENTAGE = 0.01; // 1% fee - adjust as needed
+
 type ChartDataPoint = {
   date: string;
   revenue: number;
@@ -74,24 +77,35 @@ export default function DashboardChart() {
     }
 
     // Initialize all dates with zero values
-    for (let i = daysToInclude - 1; i >= 0; i--) {
-      const date = new Date(now);
-      date.setDate(date.getDate() - i);
-      const dateKey = dateFormat(date);
+    // For year period, iterate by month instead of day for efficiency
+    if (period === "year") {
+      for (let i = 11; i >= 0; i--) {
+        const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const dateKey = dateFormat(date);
+        if (!dataPoints.has(dateKey)) {
+          dataPoints.set(dateKey, { revenue: 0, count: 0, fees: 0 });
+        }
+      }
+    } else {
+      for (let i = daysToInclude - 1; i >= 0; i--) {
+        const date = new Date(now);
+        date.setDate(date.getDate() - i);
+        const dateKey = dateFormat(date);
 
-      if (!dataPoints.has(dateKey)) {
-        dataPoints.set(dateKey, { revenue: 0, count: 0, fees: 0 });
+        if (!dataPoints.has(dateKey)) {
+          dataPoints.set(dateKey, { revenue: 0, count: 0, fees: 0 });
+        }
       }
     }
 
     // Group transactions by date
     transactions.forEach(tx => {
-      const txDate = new Date();
+      const txDate = tx.timestamp ?? new Date();
       const dateKey = dateFormat(txDate);
 
       const existing = dataPoints.get(dateKey) || { revenue: 0, count: 0, fees: 0 };
       const revenue = parseFloat(tx.amountBC);
-      const fees = revenue * 0.01; // Assume 1% fee
+      const fees = revenue * FEE_PERCENTAGE;
 
       dataPoints.set(dateKey, {
         revenue: existing.revenue + revenue,
@@ -113,6 +127,13 @@ export default function DashboardChart() {
 
     return result;
   };
+
+  // Memoize chart data to avoid recalculating on every render
+  const chartData = React.useMemo(() => ({
+    week: transformToChartData("week"),
+    month: transformToChartData("month"),
+    year: transformToChartData("year"),
+  }), [transactions, hasFetched]);
 
   const formatYAxisValue = (value: number) => {
     // Hide the "0" value by returning empty string
@@ -267,13 +288,13 @@ export default function DashboardChart() {
         </div>
       </div>
       <TabsContent value="week" className="space-y-4">
-        {renderChart(transformToChartData("week"))}
+        {renderChart(chartData.week)}
       </TabsContent>
       <TabsContent value="month" className="space-y-4">
-        {renderChart(transformToChartData("month"))}
+        {renderChart(chartData.month)}
       </TabsContent>
       <TabsContent value="year" className="space-y-4">
-        {renderChart(transformToChartData("year"))}
+        {renderChart(chartData.year)}
       </TabsContent>
     </Tabs>
   );
