@@ -257,7 +257,7 @@ export default function TransactionsPage() {
                           onClick={(e) => {
                             e.stopPropagation();
                             const explorerUrl = getExplorerUrl(transaction.chainId, transaction.transactionHash);
-                            window.open(explorerUrl, '_blank');
+                            window.open(explorerUrl, '_blank', 'noopener,noreferrer');
                           }}
                         >
                           <ExternalLink className="size-4" />

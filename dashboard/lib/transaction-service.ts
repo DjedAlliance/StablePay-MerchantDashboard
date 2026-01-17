@@ -93,7 +93,8 @@ export class TransactionService {
             const maxBlockRange = BigInt(49999);
             let allEvents: any[] = [];
 
-            for (let fromBlock = startBlock; fromBlock <= currentBlock; fromBlock += maxBlockRange) {
+            let fromBlock = startBlock;
+            while (fromBlock <= currentBlock) {
                 const toBlock = fromBlock + maxBlockRange > currentBlock ? currentBlock : fromBlock + maxBlockRange;
 
                 const purchaseEvents = await client.getLogs({
@@ -106,6 +107,8 @@ export class TransactionService {
                     toBlock
                 });
                 allEvents = [...allEvents, ...purchaseEvents];
+                
+                fromBlock = toBlock + BigInt(1);
             }
 
             const network = NETWORKS[networkKey];
@@ -117,7 +120,7 @@ export class TransactionService {
                 return {
                     buyer: this.formatAddress(event.topics[1]),
                     receiver: this.formatAddress(event.topics[2]),
-                    amountSC: (parseInt(amountSCHex, 16) / 1000000).toString(),
+                    amountSC: formatUnits(BigInt(amountSCHex), 6),
                     amountBC: formatUnits(BigInt(amountBCHex), 18),
                     blockNumber: event.blockNumber,
                     transactionHash: event.transactionHash,
