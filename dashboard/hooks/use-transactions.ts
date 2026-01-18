@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { transactionService, TransactionEvent } from '@/lib/transaction-service';
 import { useWallet } from './use-wallet';
 
-// Cache transactions in localStorage
-const CACHE_KEY = 'stablepay_transactions_v2';
+// Cache transactions in localStorage with wallet-scoped keys
+const getCacheKey = (walletAddress: string) => `stablepay_transactions_v2_${walletAddress}`;
 const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutes
 
 interface CachedData {
@@ -20,7 +20,9 @@ export function useTransactions() {
 
     // Load cached data on mount
     useEffect(() => {
-        const cached = localStorage.getItem(CACHE_KEY);
+        if (!walletAddress) return;
+        
+        const cached = localStorage.getItem(getCacheKey(walletAddress));
         if (cached) {
             try {
                 const { transactions: cachedTransactions, timestamp }: CachedData = JSON.parse(cached);
@@ -39,9 +41,11 @@ export function useTransactions() {
                 console.warn('Failed to parse cached transactions:', err);
             }
         }
-    }, []);
+    }, [walletAddress]);
 
     const fetchTransactions = async () => {
+        if (!walletAddress) return;
+        
         try {
             setLoading(true);
             setError(null);
@@ -60,7 +64,7 @@ export function useTransactions() {
                 transactions: serializableEvents as any,
                 timestamp: Date.now()
             };
-            localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
+            localStorage.setItem(getCacheKey(walletAddress), JSON.stringify(cacheData));
         } catch (err) {
             console.error('Error fetching transactions:', err);
             setError(err instanceof Error ? err.message : 'Failed to fetch transactions');
@@ -70,7 +74,9 @@ export function useTransactions() {
     };
 
     const clearCache = () => {
-        localStorage.removeItem(CACHE_KEY);
+        if (walletAddress) {
+            localStorage.removeItem(getCacheKey(walletAddress));
+        }
         setTransactions([]);
         setHasFetched(false);
     };
