@@ -43,7 +43,8 @@ export function useTransactions() {
         try {
             setLoading(true);
             setError(null);
-            const merchantAddress =  '';
+            // Filter for specific merchant address: 
+            const merchantAddress = '';
             const events = await transactionService.fetchStableCoinPurchases(merchantAddress);
             setTransactions(events);
             setHasFetched(true);
