@@ -160,13 +160,13 @@ export default function TransactionsPage() {
         </div>
 
         {/* Transaction Table */}
-        <div className="bg-card border border-border/40 rounded-lg overflow-hidden flex-1 flex flex-col">
+        <div className="bg-card border border-border/40 rounded-lg overflow-hidden flex flex-col">
           <div className="p-6 border-b border-border/40">
             <h2 className="text-xl font-serif">TRANSACTION ROSTER</h2>
           </div>
 
-          <div className="overflow-x-auto flex-1">
-            <table className="w-full min-w-full h-full">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-full">
               <thead>
                 <tr className="border-b border-border/40">
                   <th className="text-left px-6 py-4 text-sm font-medium text-muted-foreground w-32">TRANSACTION ID</th>

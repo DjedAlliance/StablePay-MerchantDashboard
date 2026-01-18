@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { transactionService, TransactionEvent } from '@/lib/transaction-service';
+import { useWallet } from './use-wallet';
 
 // Cache transactions in localStorage
-const CACHE_KEY = 'stablepay_transactions';
+const CACHE_KEY = 'stablepay_transactions_v2';
 const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutes
 
 interface CachedData {
@@ -11,6 +12,7 @@ interface CachedData {
 }
 
 export function useTransactions() {
+    const { walletAddress } = useWallet();
     const [transactions, setTransactions] = useState<TransactionEvent[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -43,8 +45,7 @@ export function useTransactions() {
         try {
             setLoading(true);
             setError(null);
-            // Filter for specific merchant address: 
-            const merchantAddress = '';
+            const merchantAddress = walletAddress || '';
             const events = await transactionService.fetchStableCoinPurchases(merchantAddress);
             setTransactions(events);
             setHasFetched(true);

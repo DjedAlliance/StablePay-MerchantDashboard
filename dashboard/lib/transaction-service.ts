@@ -41,21 +41,43 @@ export class TransactionService {
 
                 console.log(`Fetching blocks ${fromBlock} to ${toBlock}`);
 
-                const purchaseEvents = await this.publicClient.getLogs({
-                    address: getCurrentContractAddress() as `0x${string}`,
-                    event: parseAbiItem('event BoughtStableCoins(address indexed buyer, address indexed receiver, uint256 amountSC, uint256 amountBC)'),
-                    args: merchantAddress ? {
-                      receiver: merchantAddress
-                    }as any:undefined,
-                    fromBlock,
-                    toBlock
-                  });
-                allEvents = [...allEvents, ...purchaseEvents];
+                if (merchantAddress) {
+                    const [receiverEvents, buyerEvents] = await Promise.all([
+                        this.publicClient.getLogs({
+                            address: getCurrentContractAddress() as `0x${string}`,
+                            event: parseAbiItem('event BoughtStableCoins(address indexed buyer, address indexed receiver, uint256 amountSC, uint256 amountBC)'),
+                            args: { receiver: merchantAddress } as any,
+                            fromBlock,
+                            toBlock
+                        }),
+                        this.publicClient.getLogs({
+                            address: getCurrentContractAddress() as `0x${string}`,
+                            event: parseAbiItem('event BoughtStableCoins(address indexed buyer, address indexed receiver, uint256 amountSC, uint256 amountBC)'),
+                            args: { buyer: merchantAddress } as any,
+                            fromBlock,
+                            toBlock
+                        })
+                    ]);
+                    allEvents = [...allEvents, ...receiverEvents, ...buyerEvents];
+                } else {
+                    const purchaseEvents = await this.publicClient.getLogs({
+                        address: getCurrentContractAddress() as `0x${string}`,
+                        event: parseAbiItem('event BoughtStableCoins(address indexed buyer, address indexed receiver, uint256 amountSC, uint256 amountBC)'),
+                        fromBlock,
+                        toBlock
+                    });
+                    allEvents = [...allEvents, ...purchaseEvents];
+                }
             }
 
             console.log("Total events found:", allEvents.length);
 
-            const formattedEvents: TransactionEvent[] = allEvents.map(event => {
+            // Deduplicate events based on transaction hash and log index
+            const uniqueEvents = Array.from(new Map(allEvents.map(event => 
+                [`${event.transactionHash}-${event.logIndex}`, event]
+            )).values());
+
+            const formattedEvents: TransactionEvent[] = uniqueEvents.map(event => {
                 // Split the data (remove 0x prefix first)
                 const rawData = event.data.slice(2); // Remove '0x'
                 const amountSCHex = '0x' + rawData.slice(0, 64);  // First 32 bytes
