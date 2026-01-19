@@ -7,65 +7,59 @@ import BracketsIcon from "@/components/icons/brackets"
 import GearIcon from "@/components/icons/gear"
 import ProcessorIcon from "@/components/icons/proccesor"
 import BoomIcon from "@/components/icons/boom"
-import { useTransactions } from "@/hooks/use-transactions"
-import mockDataJson from "@/mock.json"
-import type { MockData } from "@/types/dashboard"
-
-const mockData = mockDataJson as MockData
+import LockIcon from "@/components/icons/lock"
+import { useTransactions } from "@/contexts/TransactionContext"
+import { useStats } from "@/hooks/use-stats"
+import { RefreshCw } from "lucide-react"
 
 // Icon mapping
 const iconMap = {
   gear: GearIcon,
   proccesor: ProcessorIcon,
   boom: BoomIcon,
+  lock: LockIcon,
 }
 
 export default function DashboardOverview() {
-  const { transactions, hasFetched } = useTransactions();
+  const { transactions, loading, hasFetched } = useTransactions();
+  const { stats, hasCachedData, isRefreshing, isHydrated } = useStats(transactions, loading);
 
-  // Calculate real stats from transactions
-  const totalTransactions = transactions.length;
-  const totalRevenue = transactions.reduce((sum, tx) => sum + parseFloat(tx.amountBC), 0);
-  const successRate = totalTransactions > 0 ? 100 : 0; // All transactions are successful in blockchain
-  const failedTransactions = 0; // No failed transactions in blockchain data
-  const pendingTransactions = 0; // No pending transactions in blockchain data
-
-  // Use real data if available, otherwise show T/A
-  const stats = [
+  // Format stats for display
+  const statsDisplay = [
     {
       label: "TRANSACTIONS PROCESSED",
-      value: hasFetched ? totalTransactions.toString() : "T/A",
-      description: hasFetched ? "THIS WEEK" : "Fetch transactions for data",
+      value: !isHydrated ? "..." : hasCachedData ? stats.transactionsProcessed.toString() : "T/A",
+      description: hasCachedData ? "TOTAL TRANSACTIONS" : "Fetch transactions for data",
       icon: "gear" as keyof typeof iconMap,
       intent: "positive" as const,
       direction: "up" as const,
     },
-            {
-              label: "REVENUE GENERATED", 
-              value: "T/A",
-              description: "Fetch transactions for data",
-              icon: "proccesor" as keyof typeof iconMap,
-              intent: "positive" as const,
-              direction: "up" as const,
-            },
+    {
+      label: "REVENUE GENERATED", 
+      value: !isHydrated ? "..." : hasCachedData ? `${stats.revenueGenerated.toFixed(4)} ETH` : "T/A",
+      description: hasCachedData ? "TOTAL EARNINGS" : "Fetch transactions for data",
+      icon: "proccesor" as keyof typeof iconMap,
+      intent: "positive" as const,
+      direction: "up" as const,
+    },
     {
       label: "SUCCESS RATE",
-      value: hasFetched ? `${successRate}%` : "T/A", 
-      description: hasFetched ? "PAYMENT SUCCESS" : "Fetch transactions for data",
+      value: !isHydrated ? "..." : hasCachedData ? `${stats.successRate}%` : "T/A", 
+      description: hasCachedData ? "PAYMENT SUCCESS" : "Fetch transactions for data",
       icon: "boom" as keyof typeof iconMap,
       intent: "positive" as const,
     },
     {
       label: "FAILED TRANSACTIONS",
-      value: "0",
-      description: "Fetch transactions for data",
-      icon: "gear" as keyof typeof iconMap,
-      intent: "negative" as const,
+      value: !isHydrated ? "..." : hasCachedData ? stats.failedTransactions.toString() : "T/A",
+      description: hasCachedData ? "NO FAILURES" : "Fetch transactions for data",
+      icon: "lock" as keyof typeof iconMap,
+      intent: stats.failedTransactions > 0 ? "negative" as const : "positive" as const,
     },
     {
       label: "PENDING TRANSACTIONS", 
-      value: "0",
-      description: "Fetch transactions for data",
+      value: !isHydrated ? "..." : hasCachedData ? stats.pendingTransactions.toString() : "T/A",
+      description: hasCachedData ? "NO PENDING" : "Fetch transactions for data",
       icon: "gear" as keyof typeof iconMap,
       intent: "neutral" as const,
     }
@@ -75,11 +69,16 @@ export default function DashboardOverview() {
     <DashboardPageLayout
       header={{
         title: "Overview",
-        description: hasFetched ? "Last updated: Real-time blockchain data" : "Fetch transactions to get analysis",
+        description: !isHydrated 
+          ? "Fetch transactions to get analysis"
+          : hasCachedData 
+            ? (isRefreshing ? "Updating data..." : "Real-time blockchain data")
+            : "Fetch transactions to get analysis",
         icon: BracketsIcon,
       }}
     >
-      {!hasFetched && (
+      {/* Info banner when no data is cached */}
+      {!hasCachedData && (
         <div className="mb-6 p-4 bg-muted/50 border border-border/40 rounded-lg">
           <p className="text-sm text-muted-foreground">
             💡 <strong>Note:</strong> Fetch transactions from the Transactions tab to get real-time analysis and statistics.
@@ -87,8 +86,18 @@ export default function DashboardOverview() {
         </div>
       )}
 
+      {/* Loading indicator during refresh */}
+      {isRefreshing && (
+        <div className="mb-6 p-3 bg-primary/10 border border-primary/20 rounded-lg flex items-center gap-2">
+          <RefreshCw className="size-4 animate-spin text-primary" />
+          <p className="text-sm text-primary font-medium">
+            Refreshing data from blockchain...
+          </p>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-8 mb-8">
-        {stats.map((stat, index) => (
+        {statsDisplay.map((stat, index) => (
           <DashboardStat
             key={index}
             label={stat.label}
@@ -102,7 +111,7 @@ export default function DashboardOverview() {
       </div>
 
       <div className="mb-6">
-        <DashboardChart />
+        <DashboardChart transactions={transactions} hasCachedData={hasCachedData} />
       </div>
     </DashboardPageLayout>
   )

@@ -1,4 +1,6 @@
-import { useState, useEffect } from 'react';
+'use client';
+
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { transactionService, TransactionEvent } from '@/lib/transaction-service';
 
 // Cache transactions in localStorage
@@ -10,7 +12,18 @@ interface CachedData {
     timestamp: number;
 }
 
-export function useTransactions() {
+interface TransactionContextType {
+    transactions: TransactionEvent[];
+    loading: boolean;
+    error: string | null;
+    hasFetched: boolean;
+    fetchTransactions: () => Promise<void>;
+    clearCache: () => void;
+}
+
+const TransactionContext = createContext<TransactionContextType | undefined>(undefined);
+
+export function TransactionProvider({ children }: { children: ReactNode }) {
     const [transactions, setTransactions] = useState<TransactionEvent[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -78,12 +91,26 @@ export function useTransactions() {
         setHasFetched(false);
     };
 
-    return {
-        transactions,
-        loading,
-        error,
-        hasFetched,
-        fetchTransactions,
-        clearCache
-    };
+    return (
+        <TransactionContext.Provider
+            value={{
+                transactions,
+                loading,
+                error,
+                hasFetched,
+                fetchTransactions,
+                clearCache,
+            }}
+        >
+            {children}
+        </TransactionContext.Provider>
+    );
+}
+
+export function useTransactions() {
+    const context = useContext(TransactionContext);
+    if (context === undefined) {
+        throw new Error('useTransactions must be used within a TransactionProvider');
+    }
+    return context;
 }
