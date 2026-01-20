@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Bell, RefreshCw, Filter, Search, Shield, MapPin, Clock, MoreVertical, X, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -34,9 +34,32 @@ const getRiskLevel = (amount: string) => {
 };
 
 export default function TransactionsPage() {
-  const { transactions, loading, error, hasFetched, fetchTransactions, clearCache } = useTransactions();
+  const { transactions, loading, error, hasFetched, hasMore, loadMore, fetchTransactions, clearCache } = useTransactions();
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const observerTarget = useRef(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries[0].isIntersecting && hasMore && !loading) {
+          loadMore();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (observerTarget.current) {
+      observer.observe(observerTarget.current);
+    }
+
+    return () => {
+      if (observerTarget.current) {
+        observer.unobserve(observerTarget.current);
+      }
+    };
+  }, [hasMore, loading, loadMore]);
+
 
   const handleRowClick = (transaction: (typeof transactions)[0]) => {
     setSelectedTransaction(transaction)
@@ -191,7 +214,7 @@ export default function TransactionsPage() {
                 </tr>
               </thead>
               <tbody>
-                {loading ? (
+                {loading && transactions.length === 0 ? (
                   <tr>
                     <td colSpan={9} className="px-6 py-8 text-center text-muted-foreground">
                       Loading transactions from blockchain...
@@ -210,7 +233,8 @@ export default function TransactionsPage() {
                     </td>
                   </tr>
                 ) : (
-                  transactions.map((transaction, index) => (
+                  <>
+                  {transactions.map((transaction, index) => (
                     <tr
                       key={transaction.transactionHash}
                       onClick={() => handleRowClick(transaction)}
@@ -264,7 +288,13 @@ export default function TransactionsPage() {
                         </Button>
                       </td>
                     </tr>
-                  ))
+                  ))}
+                  <tr ref={observerTarget} key="sentinel">
+                     <td colSpan={9} className="py-4 text-center text-sm text-muted-foreground">
+                        {loading && transactions.length > 0 ? 'Loading more transactions...' : hasMore ? 'Scroll for more' : ''}
+                     </td>
+                  </tr>
+                  </>
                 )}
                 {/* Empty rows to fill remaining space */}
                 {Array.from({ length: 10 }).map((_, index) => (
