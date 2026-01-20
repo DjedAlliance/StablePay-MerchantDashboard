@@ -161,10 +161,10 @@
 
 @layer base {
   * {
-    @apply border-border outline-ring/50 overscroll-none;
+    @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-muted text-foreground font-mono;
+    @apply bg-muted text-foreground font-mono overscroll-none;
   }
 }
 
