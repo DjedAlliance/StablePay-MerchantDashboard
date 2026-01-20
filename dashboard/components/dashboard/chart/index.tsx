@@ -63,7 +63,7 @@ export default function DashboardChart() {
 
   const renderChart = (data: ChartDataPoint[]) => {
     return (
-      <div className="bg-accent rounded-lg p-3">
+      <div className="bg-accent rounded-lg p-3 shadow-card dark:shadow-accent">
         <ChartContainer className="md:aspect-[3/1] w-full" config={chartConfig}>
           <AreaChart
             accessibilityLayer
