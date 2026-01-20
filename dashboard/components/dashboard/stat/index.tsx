@@ -50,9 +50,9 @@ export default function DashboardStat({ label, value, description, icon, tag, in
   const { prefix, numericValue, suffix, isNumeric } = parseValue(value)
 
   return (
-    <Card className="relative overflow-hidden min-h-[200px] pt-4">
+    <Card className="relative overflow-hidden min-h-[200px] pt-4 space-y-2">
       <CardHeader className="flex items-center justify-between">
-        <CardTitle className="flex items-center gap-2.5 w-full text-[11.3px]">
+        <CardTitle className="flex items-center gap-2.5 w-full text-base">
           <Bullet />
           {label}
         </CardTitle>
