@@ -10,6 +10,7 @@ import { Bullet } from "@/components/ui/bullet"
 import LockIcon from "@/components/icons/lock"
 import CreditCardIcon from "@/components/icons/credit-card"
 import { usePathname } from "next/navigation"
+import { ThemeToggleSimpleClick } from "@/components/theme-toggle-simple-click"
 
 import {
   Sidebar,
@@ -79,6 +80,9 @@ export function DashboardSidebar({ className, ...props }: React.ComponentProps<t
         <div className="grid flex-1 text-left text-sm leading-tight">
           <span className="text-2xl font-serif font-bold">StablePay</span>
           <span className="text-xs uppercase">Merchant Dashboard for Payment Management</span>
+        </div>
+        <div className="flex items-start pt-1">
+          <ThemeToggleSimpleClick />
         </div>
       </SidebarHeader>
 
