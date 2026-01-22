@@ -1,7 +1,7 @@
-import { createPublicClient, http, formatUnits } from 'viem';
+import { createPublicClient, http, formatUnits, defineChain } from 'viem';
 import { sepolia } from 'viem/chains';
 
-import { getCurrentContractAddress } from './config';
+import { NETWORKS, CONTRACTS, DEPLOYMENT_BLOCKS } from './config';
 import { parseAbiItem } from 'viem';
 
 export interface TransactionEvent {
@@ -12,15 +12,67 @@ export interface TransactionEvent {
     blockNumber: bigint;
     transactionHash: string;
     timestamp?: Date;
+    chainId: number;
+    networkName: string;
 }
 
+const etcMainnet = defineChain({
+    id: 61,
+    name: 'Ethereum Classic',
+    network: 'etc',
+    nativeCurrency: {
+        decimals: 18,
+        name: 'Ethereum Classic',
+        symbol: 'ETC',
+    },
+    rpcUrls: {
+        default: {
+            http: ['https://etc.rivet.link'],
+        },
+    },
+    blockExplorers: {
+        default: { name: 'Blockscout', url: 'https://blockscout.com/etc/mainnet' },
+    },
+    testnet: false,
+});
+
+const mordor = defineChain({
+    id: 63,
+    name: 'Mordor Testnet',
+    network: 'mordor',
+    nativeCurrency: {
+        decimals: 18,
+        name: 'Mordor Ether',
+        symbol: 'METC',
+    },
+    rpcUrls: {
+        default: {
+            http: ['https://rpc.mordor.etccooperative.org'],
+        },
+    },
+    blockExplorers: {
+        default: { name: 'BlockScout', url: 'https://blockscout.com/etc/mordor' },
+    },
+    testnet: true,
+});
+
 export class TransactionService {
-    private publicClient;
+    private sepoliaClient;
+    private etcClient;
+    private mordorClient;
 
     constructor() {
-        this.publicClient = createPublicClient({
+        this.sepoliaClient = createPublicClient({
             chain: sepolia,
-            transport: http('https://ethereum-sepolia.publicnode.com'),
+            transport: http(NETWORKS.sepolia.rpcUrl),
+        });
+        this.etcClient = createPublicClient({
+            chain: etcMainnet,
+            transport: http(NETWORKS['ethereum-classic'].rpcUrl),
+        });
+        this.mordorClient = createPublicClient({
+            chain: mordor,
+            transport: http(NETWORKS.mordor.rpcUrl),
         });
     }
 
@@ -29,14 +81,20 @@ export class TransactionService {
         return `0x${cleanAddress}`;
     };
 
-    async fetchStableCoinPurchases(merchantAddress?: string): Promise<TransactionEvent[]> {
+    private async fetchEventsFromNetwork(
+        client: any,
+        contractAddress: string,
+        networkKey: string,
+        merchantAddress?: string
+    ): Promise<TransactionEvent[]> {
         try {
-            const currentBlock = await this.publicClient.getBlockNumber();
-            const startBlock = BigInt(6000000);
+            const currentBlock = await client.getBlockNumber();
+            const startBlock = DEPLOYMENT_BLOCKS[networkKey] || BigInt(0);
             const maxBlockRange = BigInt(49999);
             let allEvents: any[] = [];
 
-            for (let fromBlock = startBlock; fromBlock <= currentBlock; fromBlock += maxBlockRange) {
+            let fromBlock = startBlock;
+            while (fromBlock <= currentBlock) {
                 const toBlock = fromBlock + maxBlockRange > currentBlock ? currentBlock : fromBlock + maxBlockRange;
 
                 console.log(`Fetching blocks ${fromBlock} to ${toBlock}`);
@@ -90,14 +148,47 @@ export class TransactionService {
                 return {
                     buyer: this.formatAddress(event.topics[1]),
                     receiver: this.formatAddress(event.topics[2]),
-                    amountSC: (parseInt(amountSCHex, 16) / 1000000).toString(),  // Convert to SC
-                    amountBC: formatUnits(BigInt(amountBCHex), 18),             // Convert to ETH
+                    amountSC: formatUnits(BigInt(amountSCHex), 6),
+                    amountBC: formatUnits(BigInt(amountBCHex), 18),
                     blockNumber: event.blockNumber,
-                    transactionHash: event.transactionHash
+                    transactionHash: event.transactionHash,
+                    chainId: network.chainId,
+                    networkName: network.name
                 };
             });
+        } catch (err) {
+            console.error(`Error fetching events from ${networkKey}:`, err);
+            return [];
+        }
+    }
 
-            return formattedEvents;
+    async fetchStableCoinPurchases(merchantAddress?: string): Promise<TransactionEvent[]> {
+        try {
+            const [sepoliaEvents, etcEvents, mordorEvents] = await Promise.all([
+                this.fetchEventsFromNetwork(
+                    this.sepoliaClient,
+                    CONTRACTS.stablepay.address,
+                    'sepolia',
+                    merchantAddress
+                ),
+                this.fetchEventsFromNetwork(
+                    this.etcClient,
+                    CONTRACTS['stablepay-etc'].address,
+                    'ethereum-classic',
+                    merchantAddress
+                ),
+                this.fetchEventsFromNetwork(
+                    this.mordorClient,
+                    CONTRACTS['stablepay-mordor'].address,
+                    'mordor',
+                    merchantAddress
+                )
+            ]);
+
+            const allEvents = [...sepoliaEvents, ...etcEvents, ...mordorEvents];
+            console.log(`Total events found: ${allEvents.length} (Sepolia: ${sepoliaEvents.length}, ETC: ${etcEvents.length}, Mordor: ${mordorEvents.length})`);
+
+            return allEvents;
         } catch (err) {
             console.error("Error fetching events:", err);
             console.log("Error message:", err instanceof Error ? err.message : String(err));
