@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { transactionService, TransactionEvent } from '@/lib/transaction-service';
+import { useWallet } from './use-wallet';
 
 // Cache transactions in localStorage
 const CACHE_KEY = 'stablepay_transactions';
@@ -11,6 +12,7 @@ interface CachedData {
 }
 
 export function useTransactions() {
+    const { walletAddress } = useWallet();
     const [transactions, setTransactions] = useState<TransactionEvent[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -37,7 +39,7 @@ export function useTransactions() {
                 console.warn('Failed to parse cached transactions:', err);
             }
         }
-    }, []);
+    }, [walletAddress]);
 
     const fetchTransactions = async () => {
         try {
