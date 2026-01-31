@@ -18,9 +18,17 @@ export function useTransactions() {
     const [error, setError] = useState<string | null>(null);
     const [hasFetched, setHasFetched] = useState(false);
 
-    // Load cached data on mount
-    useEffect(() => {
-        const cached = localStorage.getItem(CACHE_KEY);
+       // Clear state when wallet changes
+         useEffect(() => {
+            // Reset state for new wallet context
+            setTransactions([]);
+            setHasFetched(false);
+            setError(null);
+            
+            if (!walletAddress) return;
+            
+            const cacheKey = `${CACHE_KEY}_${walletAddress}`;
+            const cached = localStorage.getItem(cacheKey);
         if (cached) {
             try {
                 const { transactions: cachedTransactions, timestamp }: CachedData = JSON.parse(cached);
