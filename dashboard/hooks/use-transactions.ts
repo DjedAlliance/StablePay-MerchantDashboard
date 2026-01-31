@@ -69,7 +69,10 @@ export function useTransactions() {
                 transactions: serializableEvents as any,
                 timestamp: Date.now()
             };
-            localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
+                if (walletAddress) {
+                    const cacheKey = `${CACHE_KEY}_${walletAddress}`;
+                    localStorage.setItem(cacheKey, JSON.stringify(cacheData));
+               }
         } catch (err) {
             console.error('Error fetching transactions:', err);
             setError(err instanceof Error ? err.message : 'Failed to fetch transactions');
@@ -77,9 +80,11 @@ export function useTransactions() {
             setLoading(false);
         }
     };
-
-    const clearCache = () => {
-        localStorage.removeItem(CACHE_KEY);
+        const clearCache = () => {
+            if (walletAddress) {
+                const cacheKey = `${CACHE_KEY}_${walletAddress}`;
+                localStorage.removeItem(cacheKey);
+            }
         setTransactions([]);
         setHasFetched(false);
     };
