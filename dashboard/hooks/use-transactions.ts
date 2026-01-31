@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { transactionService, TransactionEvent } from '@/lib/transaction-service';
 import { useWallet } from './use-wallet';
 
@@ -13,6 +13,7 @@ interface CachedData {
 
 export function useTransactions() {
     const { walletAddress } = useWallet();
+    const latestWalletRef = useRef<string | null>(walletAddress);
     const [transactions, setTransactions] = useState<TransactionEvent[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -20,6 +21,7 @@ export function useTransactions() {
 
        // Clear state when wallet changes
          useEffect(() => {
+             latestWalletRef.current = walletAddress;
             // Reset state for new wallet context
             setTransactions([]);
             setHasFetched(false);
@@ -50,12 +52,14 @@ export function useTransactions() {
     }, [walletAddress]);
 
     const fetchTransactions = async () => {
+        const requestWallet = latestWalletRef.current;
         try {
             setLoading(true);
             setError(null);
             // Filter for specific merchant address: 
             const merchantAddress = '';
             const events = await transactionService.fetchStableCoinPurchases(merchantAddress);
+            if (latestWalletRef.current !== requestWallet) return;
             setTransactions(events);
             setHasFetched(true);
 
@@ -69,8 +73,8 @@ export function useTransactions() {
                 transactions: serializableEvents as any,
                 timestamp: Date.now()
             };
-                if (walletAddress) {
-                    const cacheKey = `${CACHE_KEY}_${walletAddress}`;
+               if (requestWallet) {
+                    const cacheKey = `${CACHE_KEY}_${requestWallet}`;
                     localStorage.setItem(cacheKey, JSON.stringify(cacheData));
                }
         } catch (err) {
