@@ -109,29 +109,36 @@ export class TransactionService {
         minCount: number,
         merchantAddress?: string
     ): Promise<{ events: TransactionEvent[], nextCursor: bigint | null }> {
-        const CHUNK_SIZE = BigInt(10000); // Scan 10k blocks at a time
+        const CHUNK_SIZE = BigInt(50000); // Increased chunk size
         let currentEnd = fromBlock;
         let collectedEvents: any[] = [];
         let iterations = 0;
-        const MAX_ITERATIONS = 5; // Prevent infinite loops or too many request. Adjust as needed.
+        const MAX_ITERATIONS = 20; // Increased iterations to scan deeper
 
         try {
             while (collectedEvents.length < minCount && currentEnd >= deploymentBlock && iterations < MAX_ITERATIONS) {
                 let currentStart = currentEnd - CHUNK_SIZE;
                 if (currentStart < deploymentBlock) currentStart = deploymentBlock;
 
-                const events = await client.getLogs({
-                    address: contractAddress as `0x${string}`,
-                    event: parseAbiItem('event BoughtStableCoins(address indexed buyer, address indexed receiver, uint256 amountSC, uint256 amountBC)'),
-                    args: merchantAddress ? {
-                        receiver: merchantAddress
-                    } as any : undefined,
-                    fromBlock: currentStart,
-                    toBlock: currentEnd
-                });
+                try {
+                    const events = await client.getLogs({
+                        address: contractAddress as `0x${string}`,
+                        event: parseAbiItem('event BoughtStableCoins(address indexed buyer, address indexed receiver, uint256 amountSC, uint256 amountBC)'),
+                        args: merchantAddress ? {
+                            receiver: merchantAddress
+                        } as any : undefined,
+                        fromBlock: currentStart,
+                        toBlock: currentEnd
+                    });
 
-                // Events are returned in ascending order (oldest first). We want descending (newest first).
-                collectedEvents = [...events.reverse(), ...collectedEvents];
+                    // Events are returned in ascending order (oldest first). 
+                    // We want to accumulate them. Since we process chunks backwards (Newest Chunk -> Oldest Chunk),
+                    // and inside a chunk we want Newest -> Oldest, we reverse the chunk events.
+                    // And we append them to the end of our growing list (which is Newest Blocks -> Oldest Blocks).
+                    collectedEvents = [...collectedEvents, ...events.reverse()];
+                } catch (e) {
+                    console.warn(`Failed to fetch logs for ${networkKey} range ${currentStart}-${currentEnd}`, e);
+                }
                 
                 if (currentStart === deploymentBlock) {
                     currentEnd = BigInt(-1); // Signal end of chain
@@ -219,31 +226,29 @@ export class TransactionService {
 
         for (const net of networks) {
             const cursor = cursors[net.key];
-            if (cursor !== null && buffers[net.key].length < limit) {
+            // Check if cursor is valid and not marked as finished (-1)
+            if (cursor !== undefined && cursor !== BigInt(-1) && buffers[net.key].length < limit) {
                 const fetchResult = await this.fetchBatchEvents(
                     net.client,
                     net.contract,
                     net.key,
                     BigInt(cursor),
+                    // @ts-ignore
                     DEPLOYMENT_BLOCKS[net.key],
-                    limit, // Try to get at least 'limit' items
+                    limit, 
                     merchantAddress
                 );
                 
                 buffers[net.key] = [...buffers[net.key], ...fetchResult.events];
+                
                 if (fetchResult.nextCursor !== null) {
                     cursors[net.key] = fetchResult.nextCursor;
+                    // If nextCursor is less than deployment block, we are done
+                    // @ts-ignore
+                    if (fetchResult.nextCursor < DEPLOYMENT_BLOCKS[net.key]) {
+                        cursors[net.key] = BigInt(-1);
+                    }
                 } else {
-                    // Chain exhausted
-                     // Keeps cursor as is or marks as finished? 
-                     // Using specific value or omitting key could work. 
-                     // Here we'll handle it by checking if we got events.
-                     // If nextCursor is null, we can mark it.
-                     // But types say bigint. Let's use BigInt(-1) as sentinel or remove key?
-                     // Let's rely on cursor logic: if we returned null, we set it to -1?
-                     // Refined: map value is BigInt(0) if exhausted? Or simply handle null in FetchState.
-                     // Let's allow null in Cursors? No, type is `bigint`.
-                     // I'll set it to BigInt(-1) to indicate finished.
                      cursors[net.key] = BigInt(-1);
                 }
             }
@@ -298,6 +303,66 @@ export class TransactionService {
                 hasMore
             }
         };
+    }
+
+    async fetchStableCoinPurchases(merchantAddress: string): Promise<TransactionEvent[]> {
+        const networks = [
+            { key: 'sepolia', client: this.sepoliaClient, contract: CONTRACTS.stablepay.address },
+            { key: 'ethereum-classic', client: this.etcClient, contract: CONTRACTS['stablepay-etc'].address },
+            { key: 'mordor', client: this.mordorClient, contract: CONTRACTS['stablepay-mordor'].address }
+        ];
+
+        let allEvents: TransactionEvent[] = [];
+
+        for (const net of networks) {
+            try {
+                // @ts-ignore
+                const deploymentBlock = DEPLOYMENT_BLOCKS[net.key];
+                const currentBlock = await net.client.getBlockNumber();
+                const CHUNK_SIZE = BigInt(50000); 
+
+                for (let start = deploymentBlock; start <= currentBlock; start += CHUNK_SIZE) {
+                    let end = start + CHUNK_SIZE - BigInt(1);
+                    if (end > currentBlock) end = currentBlock;
+
+                    const events = await net.client.getLogs({
+                        address: net.contract as `0x${string}`,
+                        event: parseAbiItem('event BoughtStableCoins(address indexed buyer, address indexed receiver, uint256 amountSC, uint256 amountBC)'),
+                        args: merchantAddress ? { receiver: merchantAddress } as any : undefined,
+                        fromBlock: start,
+                        toBlock: end
+                    });
+                    
+                    // @ts-ignore
+                    const networkConfig = NETWORKS[net.key];
+                    
+                    const formatted = await Promise.all(events.map(async (e) => {
+                         const rawData = e.data.slice(2);
+                         const amountSCHex = '0x' + rawData.slice(0, 64);
+                         const amountBCHex = '0x' + rawData.slice(64);
+                         const timestamp = await this.getBlockTimestamp(net.client, e.blockNumber);
+                         
+                         return {
+                            buyer: this.formatAddress(e.topics[1]!),
+                            receiver: this.formatAddress(e.topics[2]!),
+                            amountSC: formatUnits(BigInt(amountSCHex), 6),
+                            amountBC: formatUnits(BigInt(amountBCHex), 18),
+                            blockNumber: e.blockNumber,
+                            transactionHash: e.transactionHash,
+                            chainId: networkConfig.chainId,
+                            networkName: networkConfig.name,
+                            timestamp
+                         };
+                    }));
+                    
+                    allEvents = [...allEvents, ...formatted];
+                }
+            } catch (err) {
+                console.error(`Error fetching for ${net.key}`, err);
+            }
+        }
+        
+        return allEvents.sort((a, b) => (b.timestamp?.getTime() || 0) - (a.timestamp?.getTime() || 0));
     }
 }
 

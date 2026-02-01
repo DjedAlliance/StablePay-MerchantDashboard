@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { transactionService, TransactionEvent, FetchState } from '@/lib/transaction-service';
 
 // Cache transactions in localStorage
@@ -50,7 +50,7 @@ export function useTransactions() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [hasFetched, setHasFetched] = useState(false);
-    const [hasMore, setHasMore] = useState(false);
+    const [hasMore, setHasMore] = useState(true);
 
     // Load cached data on mount
     useEffect(() => {
@@ -83,8 +83,15 @@ export function useTransactions() {
         }
     }, []);
 
-    const fetchTransactionsInternal = async (isLoadMore: boolean = false) => {
-        if (loading) return;
+    const fetchTransactions = useCallback(async (isLoadMore: boolean = false) => {
+        // Prevent strictly if loading, unless it's a new fetch call that might override? 
+        // For simplicity: lock if loading.
+        // But we need to handle "Refresh" when detailed state is stagnant?
+        // We'll trust the user to not hammer the button or the UI to disable it.
+        if (loading) return; 
+
+        // If loading more and we know there's no more, stop.
+        if (isLoadMore && !hasMore) return;
 
         try {
             setLoading(true);
@@ -92,7 +99,7 @@ export function useTransactions() {
             
             const merchantAddress = ''; 
             
-            // If fetching fresh (not load more), define undefined state to reset
+            // If fetching fresh (not load more), reset state
             const stateToUse = isLoadMore ? fetchState : undefined;
             
             const { events, nextState } = await transactionService.fetchTransactions({
@@ -101,43 +108,48 @@ export function useTransactions() {
                 merchantAddress
             });
             
-            const updatedTransactions = isLoadMore ? [...transactions, ...events] : events;
-            setTransactions(updatedTransactions);
+            // If we are loading more, append events. If fresh, replace.
+            const newTransactions = isLoadMore ? [...transactions, ...events] : events;
+            
+            setTransactions(newTransactions);
             setFetchState(nextState);
             setHasMore(nextState.hasMore);
             setHasFetched(true);
 
             // Cache the data
-            const serializableEvents = updatedTransactions.map(event => ({
+            const serializableTransactions = newTransactions.map(event => ({
                 ...event,
                 blockNumber: event.blockNumber.toString()
             }));
 
             const cacheData: CachedData = {
-                transactions: serializableEvents,
-                fetchState: serializeState(nextState),
+                transactions: serializableTransactions,
+                fetchState: nextState ? serializeState(nextState) : undefined,
                 timestamp: Date.now()
             };
             localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
-            
+
         } catch (err) {
             console.error('Error fetching transactions:', err);
             setError(err instanceof Error ? err.message : 'Failed to fetch transactions');
         } finally {
             setLoading(false);
         }
-    };
+    }, [fetchState, hasMore, loading, transactions]);
 
-    const fetchTransactions = () => fetchTransactionsInternal(false);
-    const loadMore = () => fetchTransactionsInternal(true);
+    const loadMore = useCallback(() => {
+        if (!loading && hasMore) {
+            fetchTransactions(true);
+        }
+    }, [fetchTransactions, loading, hasMore]);
 
-    const clearCache = () => {
+    const clearCache = useCallback(() => {
         localStorage.removeItem(CACHE_KEY);
         setTransactions([]);
         setFetchState(undefined);
-        setHasMore(false);
+        setHasMore(true);
         setHasFetched(false);
-    };
+    }, []);
 
     return {
         transactions,
@@ -145,8 +157,8 @@ export function useTransactions() {
         error,
         hasFetched,
         hasMore,
-        fetchTransactions,
         loadMore,
+        fetchTransactions: () => fetchTransactions(false),
         clearCache
     };
 }
