@@ -171,7 +171,12 @@ export default function TransactionsPage() {
           <div className="bg-card border border-border/40 rounded-lg p-6">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-              <Input placeholder="Search transactions" className="pl-10 bg-background/50 border-border/40" />
+              <Input 
+                placeholder="Search transactions" 
+                className="pl-10 bg-background/50 border-border/40" 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
             </div>
           </div>
 
@@ -251,9 +256,7 @@ export default function TransactionsPage() {
                   </tr>
                 ) : (
                   <>
-                  {transactions.map((transaction, index) => (
-                  filteredTransactions.map((transaction, index) => (
-                  transactions.map((transaction, index) => (
+                  {filteredTransactions.map((transaction, index) => (
                     <tr
                       key={transaction.transactionHash}
                       onClick={() => handleRowClick(transaction)}
