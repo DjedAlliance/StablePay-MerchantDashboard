@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useRef, useEffect, useMemo } from "react"
 import { Bell, RefreshCw, Filter, Search, Shield, MapPin, Clock, MoreVertical, X, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -34,9 +34,43 @@ const getRiskLevel = (amount: string) => {
 };
 
 export default function TransactionsPage() {
-  const { transactions, loading, error, hasFetched, fetchTransactions, clearCache } = useTransactions();
+  const { transactions, loading, error, hasFetched, hasMore, loadMore, fetchTransactions, clearCache } = useTransactions();
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const observerTarget = useRef(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries[0].isIntersecting && hasMore && !loading) {
+          loadMore();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (observerTarget.current) {
+      observer.observe(observerTarget.current);
+    }
+
+    return () => {
+      if (observerTarget.current) {
+        observer.unobserve(observerTarget.current);
+      }
+    };
+  }, [hasMore, loading, loadMore]);
+
+  const [searchQuery, setSearchQuery] = useState("")
+
+  const filteredTransactions = transactions.filter((transaction) => {
+    const query = searchQuery.toLowerCase();
+    return (
+      transaction.transactionHash.toLowerCase().includes(query) ||
+      transaction.buyer.toLowerCase().includes(query) ||
+      transaction.receiver.toLowerCase().includes(query) ||
+      transaction.amountSC.toLowerCase().includes(query)
+    );
+  });
   
   const transactionStats = useMemo(() => {
     return {
@@ -137,7 +171,12 @@ export default function TransactionsPage() {
           <div className="bg-card border border-border/40 rounded-lg p-6">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-              <Input placeholder="Search transactions" className="pl-10 bg-background/50 border-border/40" />
+              <Input 
+                placeholder="Search transactions" 
+                className="pl-10 bg-background/50 border-border/40" 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
             </div>
           </div>
 
@@ -197,7 +236,7 @@ export default function TransactionsPage() {
                 </tr>
               </thead>
               <tbody>
-                {loading ? (
+                {loading && transactions.length === 0 ? (
                   <tr>
                     <td colSpan={9} className="px-6 py-8 text-center text-muted-foreground">
                       Loading transactions from blockchain...
@@ -216,7 +255,8 @@ export default function TransactionsPage() {
                     </td>
                   </tr>
                 ) : (
-                  transactions.map((transaction, index) => (
+                  <>
+                  {filteredTransactions.map((transaction, index) => (
                     <tr
                       key={transaction.transactionHash}
                       onClick={() => handleRowClick(transaction)}
@@ -270,7 +310,13 @@ export default function TransactionsPage() {
                         </Button>
                       </td>
                     </tr>
-                  ))
+                  ))}
+                  <tr ref={observerTarget} key="sentinel">
+                     <td colSpan={9} className="py-4 text-center text-sm text-muted-foreground">
+                        {loading && transactions.length > 0 ? 'Loading more transactions...' : hasMore ? 'Scroll for more' : ''}
+                     </td>
+                  </tr>
+                  </>
                 )}
                 {/* Empty rows to fill remaining space */}
                 {Array.from({ length: 10 }).map((_, index) => (
