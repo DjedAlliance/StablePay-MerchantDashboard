@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { Bell, RefreshCw, Filter, Search, Shield, MapPin, Clock, MoreVertical, X, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -37,17 +37,12 @@ export default function TransactionsPage() {
   const { transactions, loading, error, hasFetched, fetchTransactions, clearCache } = useTransactions();
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [searchQuery, setSearchQuery] = useState("")
-
-  const filteredTransactions = transactions.filter((transaction) => {
-    const query = searchQuery.toLowerCase();
-    return (
-      transaction.transactionHash.toLowerCase().includes(query) ||
-      transaction.buyer.toLowerCase().includes(query) ||
-      transaction.receiver.toLowerCase().includes(query) ||
-      transaction.amountSC.toLowerCase().includes(query)
-    );
-  });
+  
+  const transactionStats = useMemo(() => {
+    return {
+      total: transactions.length,
+    };
+  }, [transactions]);
 
   const handleRowClick = (transaction: (typeof transactions)[0]) => {
     setSelectedTransaction(transaction)
@@ -142,12 +137,7 @@ export default function TransactionsPage() {
           <div className="bg-card border border-border/40 rounded-lg p-6">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-              <Input 
-                placeholder="Search transactions" 
-                className="pl-10 bg-background/50 border-border/40" 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
+              <Input placeholder="Search transactions" className="pl-10 bg-background/50 border-border/40" />
             </div>
           </div>
 
@@ -156,7 +146,7 @@ export default function TransactionsPage() {
             <div className="flex items-start justify-between">
               <div>
                 <div className="text-sm text-muted-foreground mb-2">TOTAL TRANSACTIONS</div>
-                <div className="text-4xl font-bold">{loading ? "..." : transactions.length}</div>
+                <div className="text-4xl font-bold">{loading ? "..." : transactionStats.total}</div>
               </div>
               <Shield className="size-8 text-foreground" />
             </div>
@@ -219,20 +209,14 @@ export default function TransactionsPage() {
                       Error: {error}
                     </td>
                   </tr>
-                ) : transactions.length === 0 ? (
+                ) : transactionStats.total === 0 ? (
                   <tr>
                     <td colSpan={9} className="px-6 py-8 text-center text-muted-foreground">
                       {!hasFetched ? "Click 'See Transactions' to load blockchain data" : "No StableCoin purchase events found"}
                     </td>
                   </tr>
-                ) : filteredTransactions.length === 0 ? (
-                   <tr>
-                    <td colSpan={8} className="px-6 py-8 text-center text-muted-foreground">
-                      No results found for "{searchQuery}"
-                    </td>
-                  </tr>
                 ) : (
-                  filteredTransactions.map((transaction, index) => (
+                  transactions.map((transaction, index) => (
                     <tr
                       key={transaction.transactionHash}
                       onClick={() => handleRowClick(transaction)}
