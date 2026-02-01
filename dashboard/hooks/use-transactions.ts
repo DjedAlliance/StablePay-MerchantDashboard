@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { transactionService, TransactionEvent } from '@/lib/transaction-service';
+import { useWallet } from './use-wallet';
 
 // Cache transactions in localStorage
 const CACHE_KEY = 'stablepay_transactions';
@@ -11,14 +12,25 @@ interface CachedData {
 }
 
 export function useTransactions() {
+    const { walletAddress } = useWallet();
+    const latestWalletRef = useRef<string | null>(walletAddress);
     const [transactions, setTransactions] = useState<TransactionEvent[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [hasFetched, setHasFetched] = useState(false);
 
-    // Load cached data on mount
-    useEffect(() => {
-        const cached = localStorage.getItem(CACHE_KEY);
+       // Clear state when wallet changes
+         useEffect(() => {
+             latestWalletRef.current = walletAddress;
+            // Reset state for new wallet context
+            setTransactions([]);
+            setHasFetched(false);
+            setError(null);
+            
+            if (!walletAddress) return;
+            
+            const cacheKey = `${CACHE_KEY}_${walletAddress}`;
+            const cached = localStorage.getItem(cacheKey);
         if (cached) {
             try {
                 const { transactions: cachedTransactions, timestamp }: CachedData = JSON.parse(cached);
@@ -37,15 +49,17 @@ export function useTransactions() {
                 console.warn('Failed to parse cached transactions:', err);
             }
         }
-    }, []);
+    }, [walletAddress]);
 
     const fetchTransactions = async () => {
+        const requestWallet = latestWalletRef.current;
         try {
             setLoading(true);
             setError(null);
             // Filter for specific merchant address: 
             const merchantAddress = '';
             const events = await transactionService.fetchStableCoinPurchases(merchantAddress);
+            if (latestWalletRef.current !== requestWallet) return;
             setTransactions(events);
             setHasFetched(true);
 
@@ -59,7 +73,10 @@ export function useTransactions() {
                 transactions: serializableEvents as any,
                 timestamp: Date.now()
             };
-            localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
+               if (requestWallet) {
+                    const cacheKey = `${CACHE_KEY}_${requestWallet}`;
+                    localStorage.setItem(cacheKey, JSON.stringify(cacheData));
+               }
         } catch (err) {
             console.error('Error fetching transactions:', err);
             setError(err instanceof Error ? err.message : 'Failed to fetch transactions');
@@ -67,9 +84,11 @@ export function useTransactions() {
             setLoading(false);
         }
     };
-
-    const clearCache = () => {
-        localStorage.removeItem(CACHE_KEY);
+        const clearCache = () => {
+            if (walletAddress) {
+                const cacheKey = `${CACHE_KEY}_${walletAddress}`;
+                localStorage.removeItem(cacheKey);
+            }
         setTransactions([]);
         setHasFetched(false);
     };
