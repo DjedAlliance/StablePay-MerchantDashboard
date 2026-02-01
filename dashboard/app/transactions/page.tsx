@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { Bell, RefreshCw, Filter, Search, Shield, MapPin, Clock, MoreVertical, X, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -37,6 +37,12 @@ export default function TransactionsPage() {
   const { transactions, loading, error, hasFetched, fetchTransactions, clearCache } = useTransactions();
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  
+  const transactionStats = useMemo(() => {
+    return {
+      total: transactions.length,
+    };
+  }, [transactions]);
 
   const handleRowClick = (transaction: (typeof transactions)[0]) => {
     setSelectedTransaction(transaction)
@@ -53,14 +59,14 @@ export default function TransactionsPage() {
     >
       <div className="flex flex-col h-full min-h-screen">
       {/* Header */}
-      <div className="flex items-center justify-between px-8 py-4 border-b border-border/40">
+      <div className="flex items-center justify-between px-4 md:px-8 py-4 border-b border-border/40">
         <div className="flex items-center gap-2 text-sm">
           <span className="text-muted-foreground">StablePay</span>
           <span className="text-muted-foreground">/</span>
           <span className="text-primary">TRANSACTIONS</span>
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-xs text-muted-foreground">
+          <span className="text-xs text-muted-foreground hidden md:inline">
             LAST UPDATE:{" "}
             {new Date().toLocaleString("en-US", {
               month: "2-digit",
@@ -82,9 +88,9 @@ export default function TransactionsPage() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 px-8 py-8 overflow-auto">
+      <div className="flex-1 px-4 md:px-8 py-8 overflow-auto">
         {/* Title Section */}
-        <div className="flex items-start justify-between mb-8">
+        <div className="flex flex-col md:flex-row items-start justify-between mb-8 gap-4 md:gap-0">
           <div>
             <h1 className="text-4xl font-serif mb-2">Transaction Network</h1>
             <p className="text-muted-foreground">Manage and monitor payment operations</p>
@@ -140,7 +146,7 @@ export default function TransactionsPage() {
             <div className="flex items-start justify-between">
               <div>
                 <div className="text-sm text-muted-foreground mb-2">TOTAL TRANSACTIONS</div>
-                <div className="text-4xl font-bold">{loading ? "..." : transactions.length}</div>
+                <div className="text-4xl font-bold">{loading ? "..." : transactionStats.total}</div>
               </div>
               <Shield className="size-8 text-foreground" />
             </div>
@@ -203,7 +209,7 @@ export default function TransactionsPage() {
                       Error: {error}
                     </td>
                   </tr>
-                ) : transactions.length === 0 ? (
+                ) : transactionStats.total === 0 ? (
                   <tr>
                     <td colSpan={9} className="px-6 py-8 text-center text-muted-foreground">
                       {!hasFetched ? "Click 'See Transactions' to load blockchain data" : "No StableCoin purchase events found"}

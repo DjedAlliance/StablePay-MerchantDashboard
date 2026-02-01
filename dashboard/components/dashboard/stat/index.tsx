@@ -52,7 +52,7 @@ export default function DashboardStat({ label, value, description, icon, tag, in
   return (
     <Card className="relative overflow-hidden min-h-[200px]">
       <CardHeader className="flex items-center justify-between pb-4">
-        <CardTitle className="flex items-center gap-2.5 text-base">
+        <CardTitle className="flex items-center gap-2.5 text-base whitespace-nowrap">
           <Bullet />
           {label}
         </CardTitle>
