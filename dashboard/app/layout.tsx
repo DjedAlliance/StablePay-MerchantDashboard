@@ -19,13 +19,46 @@ const rebelGrotesk = localFont({
   display: "swap",
 })
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://dashboard.stablepay.stability.nexus/"
+const SITE_NAME = "StablePay"
+const DEFAULT_TITLE = "StablePay"
+const DEFAULT_DESCRIPTION =
+  "StablePay merchant dashboard for tracking payment widget performance and transaction analytics."
+const OG_IMAGE = "/djed-alliance.png"
 
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: {
-    template: "%s – StablePay",
-    default: "StablePay",
+    template: "%s | StablePay",
+    default: DEFAULT_TITLE,
   },
-  description: "StablePay merchant dashboard for tracking payment widget performance and transaction analytics."
+  description: DEFAULT_DESCRIPTION,
+  alternates: {
+  canonical: "https://dashboard.stablepay.stability.nexus",
+},
+  keywords: ["crypto payments", "stablecoin", "merchant dashboard", "USDC", "payment widget", "StablePay"],
+  openGraph: {
+    type: "website",
+    url: "/",
+    siteName: SITE_NAME,
+    title: DEFAULT_TITLE,
+    description: DEFAULT_DESCRIPTION,
+    images: [
+      {
+        url: OG_IMAGE,
+        width: 1200,
+        height: 630,
+        alt: "StablePay Open Graph Image",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    site: "@aossie_org", 
+    title: DEFAULT_TITLE,
+    description: DEFAULT_DESCRIPTION,
+    images: [OG_IMAGE],
+  },
 }
 
 export default function RootLayout({
