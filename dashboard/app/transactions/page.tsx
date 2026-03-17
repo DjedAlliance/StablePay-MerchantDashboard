@@ -45,6 +45,9 @@ export default function TransactionsPage() {
   const { transactions, loading, error, hasFetched, fetchTransactions, clearCache } = useTransactions();
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const selectedRiskLevel = selectedTransaction
+    ? getRiskLevel(selectedTransaction.amountSC)
+    : null
   
   const transactionStats = useMemo(() => {
     return {
@@ -338,15 +341,9 @@ export default function TransactionsPage() {
                 <div className="text-sm text-muted-foreground mb-2">RISK LEVEL</div>
                 <Badge
                   variant="secondary"
-                  className={`uppercase text-sm px-3 py-1 ${
-                    selectedTransaction?.risk === "high"
-                      ? "bg-primary/20 text-primary border-primary/40"
-                      : selectedTransaction?.risk === "medium"
-                        ? "bg-muted text-muted-foreground"
-                        : "bg-red-500/20 text-red-500 border-red-500/40"
-                  }`}
+                  className={`uppercase text-sm px-3 py-1 ${selectedRiskLevel ? riskStyles[selectedRiskLevel] : ""}`}
                 >
-                  {selectedTransaction?.risk}
+                  {selectedRiskLevel}
                 </Badge>
               </div>
             </div>
