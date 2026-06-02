@@ -56,10 +56,9 @@ export function useTransactions() {
         try {
             setLoading(true);
             setError(null);
-            // Filter for specific merchant address: 
-            const merchantAddress = '';
-            const events = await transactionService.fetchStableCoinPurchases(merchantAddress);
-            if (latestWalletRef.current !== requestWallet) return;
+                if (!requestWallet) throw new Error('Connect a wallet to fetch transactions');
+                const events = await transactionService.fetchStableCoinPurchases(requestWallet);
+                if (latestWalletRef.current !== requestWallet) return;
             setTransactions(events);
             setHasFetched(true);
 
