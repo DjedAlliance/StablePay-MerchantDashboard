@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { Bell, RefreshCw, Filter, Search, Shield, MapPin, Clock, MoreVertical, X, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -9,10 +9,20 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import DashboardPageLayout from "@/components/dashboard/layout"
 import CreditCardIcon from "@/components/icons/credit-card"
 import { useTransactions } from "@/hooks/use-transactions"
+import { NETWORKS } from "@/lib/config"
 
 // Helper function to format address
 const formatAddress = (address: string) => {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
+};
+
+// Helper function to get explorer URL for a transaction
+const getExplorerUrl = (chainId: number, txHash: string): string => {
+  const network = Object.values(NETWORKS).find(n => n.chainId === chainId);
+  if (network?.explorerUrl) {
+    return `${network.explorerUrl}/tx/${txHash}`;
+  }
+  return `https://sepolia.etherscan.io/tx/${txHash}`;
 };
 
 // Helper function to get risk level based on amount
@@ -27,6 +37,12 @@ export default function TransactionsPage() {
   const { transactions, loading, error, hasFetched, fetchTransactions, clearCache } = useTransactions();
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  
+  const transactionStats = useMemo(() => {
+    return {
+      total: transactions.length,
+    };
+  }, [transactions]);
 
   const handleRowClick = (transaction: (typeof transactions)[0]) => {
     setSelectedTransaction(transaction)
@@ -43,14 +59,14 @@ export default function TransactionsPage() {
     >
       <div className="flex flex-col h-full min-h-screen">
       {/* Header */}
-      <div className="flex items-center justify-between px-8 py-4 border-b border-border/40">
+      <div className="flex items-center justify-between px-4 md:px-8 py-4 border-b border-border/40">
         <div className="flex items-center gap-2 text-sm">
           <span className="text-muted-foreground">StablePay</span>
           <span className="text-muted-foreground">/</span>
           <span className="text-primary">TRANSACTIONS</span>
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-xs text-muted-foreground">
+          <span className="text-xs text-muted-foreground hidden md:inline">
             LAST UPDATE:{" "}
             {new Date().toLocaleString("en-US", {
               month: "2-digit",
@@ -72,9 +88,9 @@ export default function TransactionsPage() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 px-8 py-8 overflow-auto">
+      <div className="flex-1 px-4 md:px-8 py-8 overflow-auto">
         {/* Title Section */}
-        <div className="flex items-start justify-between mb-8">
+        <div className="flex flex-col md:flex-row items-start justify-between mb-8 gap-4 md:gap-0">
           <div>
             <h1 className="text-4xl font-serif mb-2">Transaction Network</h1>
             <p className="text-muted-foreground">Manage and monitor payment operations</p>
@@ -130,7 +146,7 @@ export default function TransactionsPage() {
             <div className="flex items-start justify-between">
               <div>
                 <div className="text-sm text-muted-foreground mb-2">TOTAL TRANSACTIONS</div>
-                <div className="text-4xl font-bold">{loading ? "..." : transactions.length}</div>
+                <div className="text-4xl font-bold">{loading ? "..." : transactionStats.total}</div>
               </div>
               <Shield className="size-8 text-foreground" />
             </div>
@@ -174,6 +190,7 @@ export default function TransactionsPage() {
                   <th className="text-left px-6 py-4 text-sm font-medium text-muted-foreground w-40">RECEIVER</th>
                   <th className="text-left px-6 py-4 text-sm font-medium text-muted-foreground w-24">STATUS</th>
                   <th className="text-left px-6 py-4 text-sm font-medium text-muted-foreground w-32">BLOCK</th>
+                  <th className="text-left px-6 py-4 text-sm font-medium text-muted-foreground w-28">BLOCKCHAIN</th>
                   <th className="text-left px-6 py-4 text-sm font-medium text-muted-foreground w-24">AMOUNT SC</th>
                   <th className="text-left px-6 py-4 text-sm font-medium text-muted-foreground w-24">RISK</th>
                   <th className="text-left px-6 py-4 text-sm font-medium text-muted-foreground w-20">ACTIONS</th>
@@ -182,19 +199,19 @@ export default function TransactionsPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={8} className="px-6 py-8 text-center text-muted-foreground">
+                    <td colSpan={9} className="px-6 py-8 text-center text-muted-foreground">
                       Loading transactions from blockchain...
                     </td>
                   </tr>
                 ) : error ? (
                   <tr>
-                    <td colSpan={8} className="px-6 py-8 text-center text-red-500">
+                    <td colSpan={9} className="px-6 py-8 text-center text-red-500">
                       Error: {error}
                     </td>
                   </tr>
-                ) : transactions.length === 0 ? (
+                ) : transactionStats.total === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-6 py-8 text-center text-muted-foreground">
+                    <td colSpan={9} className="px-6 py-8 text-center text-muted-foreground">
                       {!hasFetched ? "Click 'See Transactions' to load blockchain data" : "No StableCoin purchase events found"}
                     </td>
                   </tr>
@@ -220,6 +237,9 @@ export default function TransactionsPage() {
                           #{transaction.blockNumber.toString()}
                         </div>
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-foreground">
+                        {transaction.networkName || 'Unknown'}
+                      </td>
                       <td className="px-6 py-4 font-mono whitespace-nowrap">{transaction.amountSC} SC</td>
                       <td className="px-6 py-4">
                         <Badge
@@ -242,7 +262,8 @@ export default function TransactionsPage() {
                           className="size-8" 
                           onClick={(e) => {
                             e.stopPropagation();
-                            window.open(`https://sepolia.etherscan.io/tx/${transaction.transactionHash}`, '_blank');
+                            const explorerUrl = getExplorerUrl(transaction.chainId, transaction.transactionHash);
+                            window.open(explorerUrl, '_blank', 'noopener,noreferrer');
                           }}
                         >
                           <ExternalLink className="size-4" />
@@ -254,6 +275,7 @@ export default function TransactionsPage() {
                 {/* Empty rows to fill remaining space */}
                 {Array.from({ length: 10 }).map((_, index) => (
                   <tr key={`empty-${index}`} className="border-b border-border/40">
+                    <td className="px-6 py-4">&nbsp;</td>
                     <td className="px-6 py-4">&nbsp;</td>
                     <td className="px-6 py-4">&nbsp;</td>
                     <td className="px-6 py-4">&nbsp;</td>

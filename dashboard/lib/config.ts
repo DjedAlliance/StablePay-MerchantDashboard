@@ -38,6 +38,18 @@ export const NETWORKS: Record<string, NetworkConfig> = {
         rpcUrl: "https://polygon-mumbai.publicnode.com",
         chainId: 80001,
         explorerUrl: "https://mumbai.polygonscan.com"
+    },
+    "ethereum-classic": {
+        name: "Ethereum Classic",
+        rpcUrl: "https://etc.rivet.link",
+        chainId: 61,
+        explorerUrl: "https://blockscout.com/etc/mainnet"
+    },
+    mordor: {
+        name: "Mordor Testnet",
+        rpcUrl: "https://rpc.mordor.etccooperative.org",
+        chainId: 63,
+        explorerUrl: "https://blockscout.com/etc/mordor"
     }
 };
 
@@ -48,12 +60,23 @@ export const CONTRACTS: Record<string, ContractConfig> = {
         name: "StablePay",
         network: "sepolia"
     },
-    // Add more contracts as needed
-    // stablepayMainnet: {
-    //   address: "0x...",
-    //   name: "StablePay Mainnet",
-    //   network: "ethereum"
-    // }
+    "stablepay-etc": {
+        address: "0xCc3664d7021FD36B1Fe2b136e2324710c8442cCf",
+        name: "StablePay",
+        network: "ethereum-classic"
+    },
+    "stablepay-mordor": {
+        address: "0xD4548F4b6d08852B56cdabC6be7Fd90953179d68",
+        name: "StablePay",
+        network: "mordor"
+    }
+};
+
+// Deployment block numbers for event fetching
+export const DEPLOYMENT_BLOCKS: Record<string, bigint> = {
+    sepolia: BigInt(6000000),
+    "ethereum-classic": BigInt(20410397),
+    mordor: BigInt(11501796)
 };
 
 // Get current network configuration
