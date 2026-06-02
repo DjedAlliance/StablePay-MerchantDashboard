@@ -26,7 +26,7 @@ export function useTransactions() {
             setTransactions([]);
             setHasFetched(false);
             setError(null);
-            
+            setLoading(false);
             if (!walletAddress) return;
             
             const cacheKey = `${CACHE_KEY}_${walletAddress}`;
