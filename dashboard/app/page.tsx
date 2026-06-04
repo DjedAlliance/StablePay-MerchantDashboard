@@ -23,7 +23,7 @@ const iconMap = {
 
 // Stats cache key and expiry
 const STATS_CACHE_KEY = 'stablepay_stats_cache';
-const STATS_CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
+const STATS_CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutes (match transactions cache)
 
 interface CachedStats {
   totalTransactions: number;
