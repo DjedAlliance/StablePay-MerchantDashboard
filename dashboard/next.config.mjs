@@ -15,12 +15,13 @@ const nextConfig = {
       net: false,
       tls: false,
     };
-    config.externals.push(
+    config.externals = [
+      ...(Array.isArray(config.externals) ? config.externals : config.externals ? [config.externals] : []),
       'pino-pretty',
       'lokijs',
       'encoding',
       '@react-native-async-storage/async-storage'
-    );
+    ];
     return config;
   },
 }
