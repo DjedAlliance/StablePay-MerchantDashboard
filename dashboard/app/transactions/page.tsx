@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { Bell, RefreshCw, Filter, Search, Shield, MapPin, Clock, MoreVertical, X, ExternalLink } from "lucide-react"
+import { Bell, RefreshCw, Filter, Search, Shield, MapPin, Clock, MoreVertical, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -26,7 +26,15 @@ const getExplorerUrl = (chainId: number, txHash: string): string => {
 };
 
 // Helper function to get risk level based on amount
-const getRiskLevel = (amount: string) => {
+type RiskLevel = "high" | "medium" | "low"
+
+const riskStyles: Record<RiskLevel, string> = {
+  high: "bg-primary/20 text-primary border-primary/40",
+  medium: "bg-muted text-muted-foreground",
+  low: "bg-green-500/20 text-green-500 border-green-500/40",
+}
+
+const getRiskLevel = (amount: string): RiskLevel => {
   const numAmount = parseFloat(amount);
   if (numAmount > 100) return "high";
   if (numAmount > 50) return "medium";
@@ -37,6 +45,9 @@ export default function TransactionsPage() {
   const { transactions, loading, error, hasFetched, fetchTransactions, clearCache } = useTransactions();
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const selectedRiskLevel = selectedTransaction
+    ? getRiskLevel(selectedTransaction.amountSC)
+    : null
   
   const transactionStats = useMemo(() => {
     return {
@@ -216,7 +227,9 @@ export default function TransactionsPage() {
                     </td>
                   </tr>
                 ) : (
-                  transactions.map((transaction, index) => (
+                  transactions.map((transaction, index) => {
+                    const riskLevel = getRiskLevel(transaction.amountSC)
+                    return (
                     <tr
                       key={transaction.transactionHash}
                       onClick={() => handleRowClick(transaction)}
@@ -244,15 +257,9 @@ export default function TransactionsPage() {
                       <td className="px-6 py-4">
                         <Badge
                           variant="secondary"
-                          className={`uppercase ${
-                            getRiskLevel(transaction.amountSC) === "high"
-                              ? "bg-primary/20 text-primary border-primary/40"
-                              : getRiskLevel(transaction.amountSC) === "medium"
-                                ? "bg-muted text-muted-foreground"
-                                : "bg-green-500/20 text-green-500 border-green-500/40"
-                          }`}
+                          className={`uppercase ${riskStyles[riskLevel]}`}
                         >
-                          {getRiskLevel(transaction.amountSC)}
+                          {riskLevel}
                         </Badge>
                       </td>
                       <td className="px-6 py-4">
@@ -270,7 +277,8 @@ export default function TransactionsPage() {
                         </Button>
                       </td>
                     </tr>
-                  ))
+                    )
+                  })
                 )}
                 {/* Empty rows to fill remaining space */}
                 {Array.from({ length: 10 }).map((_, index) => (
@@ -297,14 +305,6 @@ export default function TransactionsPage() {
           <DialogHeader className="relative">
             <DialogTitle className="text-3xl font-display mb-2">{selectedTransaction?.merchant}</DialogTitle>
             <p className="text-muted-foreground font-mono">{selectedTransaction?.id}</p>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="absolute right-0 top-0"
-              onClick={() => setIsModalOpen(false)}
-            >
-              <X className="size-4" />
-            </Button>
           </DialogHeader>
 
           <div className="grid grid-cols-2 gap-8 py-6">
@@ -341,15 +341,9 @@ export default function TransactionsPage() {
                 <div className="text-sm text-muted-foreground mb-2">RISK LEVEL</div>
                 <Badge
                   variant="secondary"
-                  className={`uppercase text-sm px-3 py-1 ${
-                    selectedTransaction?.risk === "high"
-                      ? "bg-primary/20 text-primary border-primary/40"
-                      : selectedTransaction?.risk === "medium"
-                        ? "bg-muted text-muted-foreground"
-                        : "bg-red-500/20 text-red-500 border-red-500/40"
-                  }`}
+                  className={`uppercase text-sm px-3 py-1 ${selectedRiskLevel ? riskStyles[selectedRiskLevel] : ""}`}
                 >
-                  {selectedTransaction?.risk}
+                  {selectedRiskLevel}
                 </Badge>
               </div>
             </div>
