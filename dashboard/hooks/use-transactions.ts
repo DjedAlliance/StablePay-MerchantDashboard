@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { transactionService, TransactionEvent, FetchState } from '@/lib/transaction-service';
+import { useWallet } from './use-wallet';
 
 // Cache transactions in localStorage
 const CACHE_KEY = 'stablepay_transactions_v2';
@@ -45,6 +46,8 @@ const deserializeState = (state: any): FetchState => {
 };
 
 export function useTransactions() {
+    const { walletAddress } = useWallet();
+    const latestWalletRef = useRef<string | null>(walletAddress);
     const [transactions, setTransactions] = useState<TransactionEvent[]>([]);
     const [fetchState, setFetchState] = useState<FetchState | undefined>(undefined);
     const [loading, setLoading] = useState(false);
@@ -52,9 +55,18 @@ export function useTransactions() {
     const [hasFetched, setHasFetched] = useState(false);
     const [hasMore, setHasMore] = useState(true);
 
-    // Load cached data on mount
-    useEffect(() => {
-        const cached = localStorage.getItem(CACHE_KEY);
+       // Clear state when wallet changes
+         useEffect(() => {
+             latestWalletRef.current = walletAddress;
+            // Reset state for new wallet context
+            setTransactions([]);
+            setHasFetched(false);
+            setError(null);
+            setLoading(false);
+            if (!walletAddress) return;
+            
+            const cacheKey = `${CACHE_KEY}_${walletAddress}`;
+            const cached = localStorage.getItem(cacheKey);
         if (cached) {
             try {
                 const { transactions: cachedTransactions, fetchState: cachedState, timestamp }: CachedData = JSON.parse(cached);
@@ -81,7 +93,7 @@ export function useTransactions() {
                 localStorage.removeItem(CACHE_KEY);
             }
         }
-    }, []);
+    }, [walletAddress]);
 
     const fetchTransactions = useCallback(async (isLoadMore: boolean = false) => {
         // Prevent strictly if loading, unless it's a new fetch call that might override? 
@@ -127,8 +139,10 @@ export function useTransactions() {
                 fetchState: nextState ? serializeState(nextState) : undefined,
                 timestamp: Date.now()
             };
-            localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
-
+               if (requestWallet) {
+                    const cacheKey = `${CACHE_KEY}_${requestWallet}`;
+                    localStorage.setItem(cacheKey, JSON.stringify(cacheData));
+               }
         } catch (err) {
             console.error('Error fetching transactions:', err);
             setError(err instanceof Error ? err.message : 'Failed to fetch transactions');
@@ -143,8 +157,11 @@ export function useTransactions() {
         }
     }, [fetchTransactions, loading, hasMore]);
 
-    const clearCache = useCallback(() => {
-        localStorage.removeItem(CACHE_KEY);
+    const clearCache = () => {
+        if (walletAddress) {
+            const cacheKey = `${CACHE_KEY}_${walletAddress}`;
+            localStorage.removeItem(cacheKey);
+        }
         setTransactions([]);
         setFetchState(undefined);
         setHasMore(true);
