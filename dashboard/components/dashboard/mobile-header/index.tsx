@@ -19,6 +19,9 @@ export function MobileHeader() {
             </div>
           </div>
         </div>
+        
+        {/* Right: Theme Toggle */}
+        <ThemeToggleSimple />
       </div>
     </div>
   )
