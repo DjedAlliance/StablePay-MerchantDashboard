@@ -13,7 +13,9 @@ interface CachedData {
 
 export function useTransactions() {
     const { walletAddress } = useWallet();
-    const latestWalletRef = useRef<string | null>(walletAddress);
+    const isDevelopment = process.env.NODE_ENV === 'development';
+    const activeAddress = isDevelopment ? '' : (walletAddress || '');
+    const latestWalletRef = useRef<string>(activeAddress);
     const [transactions, setTransactions] = useState<TransactionEvent[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -21,15 +23,15 @@ export function useTransactions() {
 
        // Clear state when wallet changes
          useEffect(() => {
-             latestWalletRef.current = walletAddress;
+             latestWalletRef.current = activeAddress;
             // Reset state for new wallet context
             setTransactions([]);
             setHasFetched(false);
             setError(null);
             setLoading(false);
-            if (!walletAddress) return;
+            if (!isDevelopment && !activeAddress) return;
             
-            const cacheKey = `${CACHE_KEY}_${walletAddress}`;
+            const cacheKey = `${CACHE_KEY}_${activeAddress || 'dev'}`;
             const cached = localStorage.getItem(cacheKey);
         if (cached) {
             try {
@@ -49,15 +51,15 @@ export function useTransactions() {
                 console.warn('Failed to parse cached transactions:', err);
             }
         }
-    }, [walletAddress]);
+    }, [activeAddress, isDevelopment]);
 
     const fetchTransactions = async () => {
         const requestWallet = latestWalletRef.current;
         try {
             setLoading(true);
             setError(null);
-                if (!requestWallet) throw new Error('Connect a wallet to fetch transactions');
-                const events = await transactionService.fetchStableCoinPurchases(requestWallet);
+                if (!isDevelopment && !requestWallet) throw new Error('Connect a wallet to fetch transactions');
+                const events = await transactionService.fetchStableCoinPurchases(requestWallet || undefined);
                 if (latestWalletRef.current !== requestWallet) return;
             setTransactions(events);
             setHasFetched(true);
@@ -72,10 +74,8 @@ export function useTransactions() {
                 transactions: serializableEvents as any,
                 timestamp: Date.now()
             };
-               if (requestWallet) {
-                    const cacheKey = `${CACHE_KEY}_${requestWallet}`;
-                    localStorage.setItem(cacheKey, JSON.stringify(cacheData));
-               }
+            const cacheKey = `${CACHE_KEY}_${requestWallet || 'dev'}`;
+            localStorage.setItem(cacheKey, JSON.stringify(cacheData));
         } catch (err) {
             console.error('Error fetching transactions:', err);
             setError(err instanceof Error ? err.message : 'Failed to fetch transactions');
@@ -84,10 +84,8 @@ export function useTransactions() {
         }
     };
         const clearCache = () => {
-            if (walletAddress) {
-                const cacheKey = `${CACHE_KEY}_${walletAddress}`;
-                localStorage.removeItem(cacheKey);
-            }
+            const cacheKey = `${CACHE_KEY}_${activeAddress || 'dev'}`;
+            localStorage.removeItem(cacheKey);
         setTransactions([]);
         setHasFetched(false);
     };
