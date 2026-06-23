@@ -24,7 +24,7 @@ const SITE_NAME = "StablePay"
 const DEFAULT_TITLE = "StablePay | Crypto Merchant Payment Dashboard"
 const DEFAULT_DESCRIPTION =
   "StablePay merchant dashboard for tracking payment widget performance and transaction analytics."
-const OG_IMAGE ="https://i.ibb.co/Wv90qW5m/djed-alliance.png"
+const OG_IMAGE ="stablePayOG.png"
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
