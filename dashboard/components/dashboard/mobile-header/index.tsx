@@ -1,5 +1,6 @@
 import Image from "next/image"
 import { SidebarTrigger } from "@/components/ui/sidebar"
+import { ThemeToggleSimple } from "@/components/theme-toggle-simple"
 
 export function MobileHeader() {
   return (
@@ -19,6 +20,9 @@ export function MobileHeader() {
             </div>
           </div>
         </div>
+        
+        {/* Right: Theme Toggle */}
+        <ThemeToggleSimple />
       </div>
     </div>
   )

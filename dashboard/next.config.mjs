@@ -8,6 +8,22 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  webpack: (config) => {
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      fs: false,
+      net: false,
+      tls: false,
+    };
+    config.externals = [
+      ...(Array.isArray(config.externals) ? config.externals : config.externals ? [config.externals] : []),
+      'pino-pretty',
+      'lokijs',
+      'encoding',
+      '@react-native-async-storage/async-storage'
+    ];
+    return config;
+  },
 }
 
 export default nextConfig

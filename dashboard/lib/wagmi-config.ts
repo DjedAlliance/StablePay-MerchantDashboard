@@ -7,4 +7,7 @@ export const config = createConfig({
     [mainnet.id]: http(),
     [sepolia.id]: http(),
   },
+  batch: {
+    multicall: true,
+  },
 })
