@@ -19,7 +19,7 @@ const rebelGrotesk = localFont({
   display: "swap",
 })
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://dashboard.stablepay.stability.nexus/"
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://dashboard.stablepay.stability.nexus"
 const SITE_NAME = "StablePay"
 const DEFAULT_TITLE = "StablePay | Crypto Merchant Payment Dashboard"
 const DEFAULT_DESCRIPTION =
@@ -34,7 +34,7 @@ export const metadata: Metadata = {
   },
   description: DEFAULT_DESCRIPTION,
   alternates: {
-  canonical: "https://dashboard.stablepay.stability.nexus",
+  canonical: "/",
 },
   keywords: ["crypto payments", "stablecoin", "merchant dashboard", "USDC", "payment widget", "StablePay"],
   openGraph: {
