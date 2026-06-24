@@ -1,10 +1,13 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { transactionService, TransactionEvent } from '@/lib/transaction-service';
 import { useWallet } from './use-wallet';
 
 // Cache transactions in localStorage
 const CACHE_KEY = 'stablepay_transactions';
 const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutes
+
+const PAGE_SIZE_OPTIONS = [25, 50, 100, 200] as const;
+export type PageSize = (typeof PAGE_SIZE_OPTIONS)[number];
 
 interface CachedData {
     transactions: (Omit<TransactionEvent, 'blockNumber'> & { blockNumber: string })[];
@@ -21,6 +24,10 @@ export function useTransactions() {
     const [error, setError] = useState<string | null>(null);
     const [hasFetched, setHasFetched] = useState(false);
 
+    // Pagination state
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState<PageSize>(25);
+
        // Clear state when wallet changes
          useEffect(() => {
              latestWalletRef.current = activeAddress;
@@ -29,6 +36,7 @@ export function useTransactions() {
             setHasFetched(false);
             setError(null);
             setLoading(false);
+            setCurrentPage(1);
             if (!isDevelopment && !activeAddress) return;
             
             const cacheKey = `${CACHE_KEY}_${activeAddress || 'dev'}`;
@@ -53,6 +61,34 @@ export function useTransactions() {
         }
     }, [activeAddress, isDevelopment]);
 
+    // Pagination computed values
+    const totalPages = useMemo(() => {
+        return Math.max(1, Math.ceil(transactions.length / pageSize));
+    }, [transactions.length, pageSize]);
+
+    // Clamp currentPage when totalPages changes (e.g. after changing pageSize)
+    useEffect(() => {
+        if (currentPage > totalPages) {
+            setCurrentPage(totalPages);
+        }
+    }, [totalPages, currentPage]);
+
+    const paginatedTransactions = useMemo(() => {
+        const startIndex = (currentPage - 1) * pageSize;
+        const endIndex = startIndex + pageSize;
+        return transactions.slice(startIndex, endIndex);
+    }, [transactions, currentPage, pageSize]);
+
+    const goToPage = useCallback((page: number) => {
+        const clamped = Math.max(1, Math.min(page, totalPages));
+        setCurrentPage(clamped);
+    }, [totalPages]);
+
+    const changePageSize = useCallback((newSize: PageSize) => {
+        setPageSize(newSize);
+        setCurrentPage(1); // Reset to page 1 on page size change
+    }, []);
+
     const fetchTransactions = async () => {
         const requestWallet = latestWalletRef.current;
         try {
@@ -63,6 +99,7 @@ export function useTransactions() {
                 if (latestWalletRef.current !== requestWallet) return;
             setTransactions(events);
             setHasFetched(true);
+            setCurrentPage(1); // Reset to first page on fresh fetch
 
             // Cache the data (convert BigInt to string for serialization)
             const serializableEvents = events.map(event => ({
@@ -88,14 +125,24 @@ export function useTransactions() {
             localStorage.removeItem(cacheKey);
         setTransactions([]);
         setHasFetched(false);
+        setCurrentPage(1);
     };
 
     return {
         transactions,
+        paginatedTransactions,
         loading,
         error,
         hasFetched,
         fetchTransactions,
-        clearCache
+        clearCache,
+        // Pagination
+        currentPage,
+        pageSize,
+        totalPages,
+        totalCount: transactions.length,
+        goToPage,
+        changePageSize,
+        pageSizeOptions: PAGE_SIZE_OPTIONS,
     };
 }

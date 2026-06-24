@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { Bell, RefreshCw, Filter, Search, Shield, MapPin, Clock, MoreVertical, ExternalLink } from "lucide-react"
+import { Bell, RefreshCw, Filter, Search, Shield, MapPin, Clock, MoreVertical, ExternalLink, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import DashboardPageLayout from "@/components/dashboard/layout"
 import CreditCardIcon from "@/components/icons/credit-card"
 import { useTransactions } from "@/hooks/use-transactions"
+import type { PageSize } from "@/hooks/use-transactions"
 import { NETWORKS } from "@/lib/config"
 
 // Helper function to format address
@@ -41,24 +42,78 @@ const getRiskLevel = (amount: string): RiskLevel => {
   return "low";
 };
 
+/**
+ * Compute which page numbers to display in the pagination bar.
+ * Always shows first page, last page, and a window around current page.
+ * Gaps are represented by -1 (rendered as ellipsis).
+ */
+function getPageNumbers(currentPage: number, totalPages: number): number[] {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1);
+  }
+
+  const pages: number[] = [];
+  const windowStart = Math.max(2, currentPage - 1);
+  const windowEnd = Math.min(totalPages - 1, currentPage + 1);
+
+  pages.push(1);
+
+  if (windowStart > 2) {
+    pages.push(-1); // ellipsis
+  }
+
+  for (let i = windowStart; i <= windowEnd; i++) {
+    pages.push(i);
+  }
+
+  if (windowEnd < totalPages - 1) {
+    pages.push(-1); // ellipsis
+  }
+
+  pages.push(totalPages);
+
+  return pages;
+}
+
 export default function TransactionsPage() {
-  const { transactions, loading, error, hasFetched, fetchTransactions, clearCache } = useTransactions();
+  const {
+    transactions,
+    paginatedTransactions,
+    loading,
+    error,
+    hasFetched,
+    fetchTransactions,
+    clearCache,
+    currentPage,
+    pageSize,
+    totalPages,
+    totalCount,
+    goToPage,
+    changePageSize,
+    pageSizeOptions,
+  } = useTransactions();
+
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const selectedRiskLevel = selectedTransaction
     ? getRiskLevel(selectedTransaction.amountSC)
     : null
-  
+
   const transactionStats = useMemo(() => {
     return {
-      total: transactions.length,
+      total: totalCount,
     };
-  }, [transactions]);
+  }, [totalCount]);
 
   const handleRowClick = (transaction: (typeof transactions)[0]) => {
     setSelectedTransaction(transaction)
     setIsModalOpen(true)
   }
+
+  // Compute pagination display info
+  const startItem = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const endItem = Math.min(currentPage * pageSize, totalCount);
+  const pageNumbers = getPageNumbers(currentPage, totalPages);
 
   return (
     <DashboardPageLayout
@@ -188,8 +243,27 @@ export default function TransactionsPage() {
 
         {/* Transaction Table */}
         <div className="bg-card border border-border/40 rounded-lg overflow-hidden flex-1 flex flex-col">
-          <div className="p-6 border-b border-border/40">
+          <div className="p-6 border-b border-border/40 flex items-center justify-between">
             <h2 className="text-xl font-serif">TRANSACTION ROSTER</h2>
+            {hasFetched && totalCount > 0 && (
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-muted-foreground">
+                  Rows per page:
+                </span>
+                <select
+                  id="page-size-select"
+                  value={pageSize}
+                  onChange={(e) => changePageSize(Number(e.target.value) as PageSize)}
+                  className="bg-background border border-border/40 rounded-md px-2 py-1 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer"
+                >
+                  {pageSizeOptions.map((size) => (
+                    <option key={size} value={size}>
+                      {size}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           <div className="overflow-x-auto flex-1">
@@ -227,7 +301,7 @@ export default function TransactionsPage() {
                     </td>
                   </tr>
                 ) : (
-                  transactions.map((transaction, index) => {
+                  paginatedTransactions.map((transaction, index) => {
                     const riskLevel = getRiskLevel(transaction.amountSC)
                     return (
                     <tr
@@ -280,23 +354,97 @@ export default function TransactionsPage() {
                     )
                   })
                 )}
-                {/* Empty rows to fill remaining space */}
-                {Array.from({ length: 10 }).map((_, index) => (
-                  <tr key={`empty-${index}`} className="border-b border-border/40">
-                    <td className="px-6 py-4">&nbsp;</td>
-                    <td className="px-6 py-4">&nbsp;</td>
-                    <td className="px-6 py-4">&nbsp;</td>
-                    <td className="px-6 py-4">&nbsp;</td>
-                    <td className="px-6 py-4">&nbsp;</td>
-                    <td className="px-6 py-4">&nbsp;</td>
-                    <td className="px-6 py-4">&nbsp;</td>
-                    <td className="px-6 py-4">&nbsp;</td>
-                    <td className="px-6 py-4">&nbsp;</td>
-                  </tr>
-                ))}
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Controls */}
+          {hasFetched && totalCount > 0 && (
+            <div className="px-6 py-4 border-t border-border/40 flex flex-col sm:flex-row items-center justify-between gap-4">
+              {/* Showing X-Y of Z */}
+              <div className="text-sm text-muted-foreground">
+                Showing <span className="font-medium text-foreground">{startItem}</span>–<span className="font-medium text-foreground">{endItem}</span> of{" "}
+                <span className="font-medium text-foreground">{totalCount}</span> transactions
+              </div>
+
+              {/* Page navigation */}
+              <div className="flex items-center gap-1">
+                {/* First page */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-8"
+                  onClick={() => goToPage(1)}
+                  disabled={currentPage === 1}
+                  aria-label="First page"
+                >
+                  <ChevronsLeft className="size-4" />
+                </Button>
+
+                {/* Previous page */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-8"
+                  onClick={() => goToPage(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  aria-label="Previous page"
+                >
+                  <ChevronLeft className="size-4" />
+                </Button>
+
+                {/* Page number buttons */}
+                {pageNumbers.map((pageNum, idx) =>
+                  pageNum === -1 ? (
+                    <span
+                      key={`ellipsis-${idx}`}
+                      className="px-1 text-muted-foreground select-none"
+                    >
+                      …
+                    </span>
+                  ) : (
+                    <Button
+                      key={pageNum}
+                      variant={pageNum === currentPage ? "default" : "ghost"}
+                      size="icon"
+                      className={`size-8 text-xs font-medium ${
+                        pageNum === currentPage
+                          ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                          : ""
+                      }`}
+                      onClick={() => goToPage(pageNum)}
+                    >
+                      {pageNum}
+                    </Button>
+                  )
+                )}
+
+                {/* Next page */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-8"
+                  onClick={() => goToPage(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  aria-label="Next page"
+                >
+                  <ChevronRight className="size-4" />
+                </Button>
+
+                {/* Last page */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-8"
+                  onClick={() => goToPage(totalPages)}
+                  disabled={currentPage === totalPages}
+                  aria-label="Last page"
+                >
+                  <ChevronsRight className="size-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
