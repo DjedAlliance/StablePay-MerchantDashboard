@@ -81,6 +81,15 @@ export class TransactionService {
         return `0x${cleanAddress}`;
     };
 
+    private getClientByChainId(chainId: number): any | null {
+        switch (chainId) {
+            case 11155111: return this.sepoliaClient;   // Sepolia
+            case 61:       return this.etcClient;        // ETC Mainnet
+            case 63:       return this.mordorClient;     // Mordor Testnet
+            default:       return null;
+        }
+    }
+
     private async fetchEventsFromNetwork(
         client: any,
         contractAddress: string,
@@ -132,6 +141,64 @@ export class TransactionService {
             console.error(`Error fetching events from ${networkKey}:`, err);
             return [];
         }
+    }
+
+    /**
+     * Fetch block timestamps for a list of transaction events.
+     * Groups by (chainId, blockNumber) to minimize RPC calls — each unique block
+     * is fetched only once even if multiple transactions share it.
+     */
+    async fetchTimestampsForEvents(events: TransactionEvent[]): Promise<TransactionEvent[]> {
+        // Group unique blocks by chainId
+        const blocksByChain = new Map<number, Set<string>>();
+        for (const event of events) {
+            if (event.timestamp) continue; // Already has timestamp
+            const chainId = event.chainId;
+            if (!blocksByChain.has(chainId)) {
+                blocksByChain.set(chainId, new Set());
+            }
+            blocksByChain.get(chainId)!.add(event.blockNumber.toString());
+        }
+
+        // Fetch block timestamps keyed by "chainId-blockNumber"
+        const timestampMap = new Map<string, Date>();
+
+        for (const [chainId, blockNumbers] of blocksByChain) {
+            const client = this.getClientByChainId(chainId);
+            if (!client) continue;
+
+            // Fetch blocks in parallel per chain (bounded concurrency)
+            const blocks = Array.from(blockNumbers);
+            const batchSize = 10;
+            for (let i = 0; i < blocks.length; i += batchSize) {
+                const batch = blocks.slice(i, i + batchSize);
+                const results = await Promise.all(
+                    batch.map(async (blockNumStr) => {
+                        try {
+                            const block = await client.getBlock({ blockNumber: BigInt(blockNumStr) });
+                            return { blockNumStr, timestamp: Number(block.timestamp) };
+                        } catch (err) {
+                            console.warn(`Failed to fetch block ${blockNumStr} on chain ${chainId}:`, err);
+                            return null;
+                        }
+                    })
+                );
+                for (const result of results) {
+                    if (result) {
+                        const key = `${chainId}-${result.blockNumStr}`;
+                        timestampMap.set(key, new Date(result.timestamp * 1000));
+                    }
+                }
+            }
+        }
+
+        // Assign timestamps to events
+        return events.map(event => {
+            if (event.timestamp) return event;
+            const key = `${event.chainId}-${event.blockNumber.toString()}`;
+            const ts = timestampMap.get(key);
+            return ts ? { ...event, timestamp: ts } : event;
+        });
     }
 
     async fetchStableCoinPurchases(merchantAddress?: string): Promise<TransactionEvent[]> {

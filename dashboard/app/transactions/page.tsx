@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { Bell, RefreshCw, Filter, Search, Shield, MapPin, Clock, MoreVertical, ExternalLink, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react"
+import { Bell, RefreshCw, Filter, Search, Shield, MapPin, Clock, MoreVertical, ExternalLink, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUpDown, ArrowUp, ArrowDown, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import DashboardPageLayout from "@/components/dashboard/layout"
 import CreditCardIcon from "@/components/icons/credit-card"
 import { useTransactions } from "@/hooks/use-transactions"
-import type { PageSize } from "@/hooks/use-transactions"
+import type { PageSize, SortBy, SortDirection } from "@/hooks/use-transactions"
 import { NETWORKS } from "@/lib/config"
 
 // Helper function to format address
@@ -91,6 +91,15 @@ export default function TransactionsPage() {
     goToPage,
     changePageSize,
     pageSizeOptions,
+    // Sorting
+    sortBy,
+    sortDirection,
+    changeSortBy,
+    changeSortDirection,
+    fetchingTimestamps,
+    sortByOptions,
+    sortByLabels,
+    sortDirectionOptions,
   } = useTransactions();
 
   const [selectedTransaction, setSelectedTransaction] = useState<any>(null)
@@ -243,25 +252,75 @@ export default function TransactionsPage() {
 
         {/* Transaction Table */}
         <div className="bg-card border border-border/40 rounded-lg overflow-hidden flex-1 flex flex-col">
-          <div className="p-6 border-b border-border/40 flex items-center justify-between">
+          <div className="p-6 border-b border-border/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <h2 className="text-xl font-serif">TRANSACTION ROSTER</h2>
             {hasFetched && totalCount > 0 && (
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-muted-foreground">
-                  Rows per page:
-                </span>
-                <select
-                  id="page-size-select"
-                  value={pageSize}
-                  onChange={(e) => changePageSize(Number(e.target.value) as PageSize)}
-                  className="bg-background border border-border/40 rounded-md px-2 py-1 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer"
+              <div className="flex items-center gap-4 flex-wrap">
+                {/* Fetching timestamps indicator */}
+                {fetchingTimestamps && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="size-4 animate-spin" />
+                    <span>Fetching timestamps…</span>
+                  </div>
+                )}
+
+                {/* Sort By */}
+                <div className="flex items-center gap-2">
+                  <ArrowUpDown className="size-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">Sort by:</span>
+                  <select
+                    id="sort-by-select"
+                    value={sortBy}
+                    onChange={(e) => changeSortBy(e.target.value as SortBy)}
+                    className="bg-background border border-border/40 rounded-md px-2 py-1 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer"
+                  >
+                    {sortByOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {sortByLabels[option]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Sort Direction */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1.5 text-sm h-8 px-2"
+                  onClick={() =>
+                    changeSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+                  }
+                  title={sortDirection === 'asc' ? 'Ascending' : 'Descending'}
                 >
-                  {pageSizeOptions.map((size) => (
-                    <option key={size} value={size}>
-                      {size}
-                    </option>
-                  ))}
-                </select>
+                  {sortDirection === 'asc' ? (
+                    <ArrowUp className="size-4" />
+                  ) : (
+                    <ArrowDown className="size-4" />
+                  )}
+                  {sortDirection === 'asc' ? 'Asc' : 'Desc'}
+                </Button>
+
+                {/* Divider */}
+                <div className="h-6 w-px bg-border/40 hidden sm:block" />
+
+                {/* Rows per page */}
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">
+                    Rows per page:
+                  </span>
+                  <select
+                    id="page-size-select"
+                    value={pageSize}
+                    onChange={(e) => changePageSize(Number(e.target.value) as PageSize)}
+                    className="bg-background border border-border/40 rounded-md px-2 py-1 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer"
+                  >
+                    {pageSizeOptions.map((size) => (
+                      <option key={size} value={size}>
+                        {size}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             )}
           </div>
@@ -274,9 +333,9 @@ export default function TransactionsPage() {
                   <th className="text-left px-6 py-4 text-sm font-medium text-muted-foreground w-40">BUYER</th>
                   <th className="text-left px-6 py-4 text-sm font-medium text-muted-foreground w-40">RECEIVER</th>
                   <th className="text-left px-6 py-4 text-sm font-medium text-muted-foreground w-24">STATUS</th>
-                  <th className="text-left px-6 py-4 text-sm font-medium text-muted-foreground w-32">BLOCK</th>
+                  <th className="text-left px-6 py-4 text-sm font-medium text-muted-foreground w-32">{sortBy === 'timestamp' ? 'TIMESTAMP' : 'BLOCK'}</th>
                   <th className="text-left px-6 py-4 text-sm font-medium text-muted-foreground w-28">BLOCKCHAIN</th>
-                  <th className="text-left px-6 py-4 text-sm font-medium text-muted-foreground w-24">AMOUNT SC</th>
+                  <th className="text-left px-6 py-4 text-sm font-medium text-muted-foreground w-24">{sortBy === 'amountBC' ? 'AMOUNT BC' : 'AMOUNT SC'}</th>
                   <th className="text-left px-6 py-4 text-sm font-medium text-muted-foreground w-24">RISK</th>
                   <th className="text-left px-6 py-4 text-sm font-medium text-muted-foreground w-20">ACTIONS</th>
                 </tr>
@@ -319,15 +378,30 @@ export default function TransactionsPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="flex items-center gap-2 whitespace-nowrap">
-                          <MapPin className="size-4 text-muted-foreground" />
-                          #{transaction.blockNumber.toString()}
-                        </div>
+                        {sortBy === 'timestamp' ? (
+                          <div className="flex items-center gap-2 whitespace-nowrap">
+                            <Clock className="size-4 text-muted-foreground" />
+                            {transaction.timestamp
+                              ? transaction.timestamp.toLocaleString('en-US', {
+                                  month: 'short',
+                                  day: '2-digit',
+                                  year: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })
+                              : '—'}
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 whitespace-nowrap">
+                            <MapPin className="size-4 text-muted-foreground" />
+                            #{transaction.blockNumber.toString()}
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-foreground">
                         {transaction.networkName || 'Unknown'}
                       </td>
-                      <td className="px-6 py-4 font-mono whitespace-nowrap">{transaction.amountSC} SC</td>
+                      <td className="px-6 py-4 font-mono whitespace-nowrap">{sortBy === 'amountBC' ? `${transaction.amountBC} BC` : `${transaction.amountSC} SC`}</td>
                       <td className="px-6 py-4">
                         <Badge
                           variant="secondary"
