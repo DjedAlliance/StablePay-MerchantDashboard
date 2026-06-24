@@ -128,7 +128,7 @@ export default function TransactionsPage() {
                   disabled={loading}
                 >
                   <RefreshCw className={`size-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                  {loading ? 'Loading...' : 'Refresh Data'}
+                  {loading ? 'Syncing...' : 'Fetch Fresh Data'}
                 </Button>
                 <Button 
                   variant="outline" 

@@ -100,7 +100,7 @@ export default function DashboardChart() {
 
     // Group transactions by date
     transactions.forEach(tx => {
-      const txDate = tx.timestamp ?? new Date();
+      const txDate = tx.timestamp ? new Date(tx.timestamp) : new Date();
       const dateKey = dateFormat(txDate);
 
       const existing = dataPoints.get(dateKey) || { revenue: 0, count: 0, fees: 0 };

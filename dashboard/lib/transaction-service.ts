@@ -16,6 +16,11 @@ export interface TransactionEvent {
     networkName: string;
 }
 
+export interface FetchResult {
+    events: TransactionEvent[];
+    highestBlocks: Record<string, bigint>;
+}
+
 const etcMainnet = defineChain({
     id: 61,
     name: 'Ethereum Classic',
@@ -85,11 +90,18 @@ export class TransactionService {
         client: any,
         contractAddress: string,
         networkKey: string,
-        merchantAddress?: string
-    ): Promise<TransactionEvent[]> {
+        merchantAddress?: string,
+        fromBlockOverride?: bigint
+    ): Promise<{ events: TransactionEvent[]; currentBlock: bigint }> {
         try {
             const currentBlock = await client.getBlockNumber();
-            const startBlock = DEPLOYMENT_BLOCKS[networkKey] || BigInt(0);
+            const startBlock = fromBlockOverride ?? (DEPLOYMENT_BLOCKS[networkKey] || BigInt(0));
+
+            // If the override is already past the current block, there's nothing new
+            if (startBlock > currentBlock) {
+                return { events: [], currentBlock };
+            }
+
             const maxBlockRange = BigInt(49999);
             let allEvents: any[] = [];
 
@@ -112,7 +124,7 @@ export class TransactionService {
             }
 
             const network = NETWORKS[networkKey];
-            return allEvents.map(event => {
+            const events = allEvents.map(event => {
                 const rawData = event.data.slice(2);
                 const amountSCHex = '0x' + rawData.slice(0, 64);
                 const amountBCHex = '0x' + rawData.slice(64);
@@ -128,39 +140,53 @@ export class TransactionService {
                     networkName: network.name
                 };
             });
+            return { events, currentBlock };
         } catch (err) {
             console.error(`Error fetching events from ${networkKey}:`, err);
-            return [];
+            return { events: [], currentBlock: fromBlockOverride ?? BigInt(0) };
         }
     }
 
-    async fetchStableCoinPurchases(merchantAddress?: string): Promise<TransactionEvent[]> {
+    async fetchStableCoinPurchases(
+        merchantAddress?: string,
+        fromBlocks?: Record<string, bigint>
+    ): Promise<FetchResult> {
         try {
-            const [sepoliaEvents, etcEvents, mordorEvents] = await Promise.all([
+            const [sepoliaResult, etcResult, mordorResult] = await Promise.all([
                 this.fetchEventsFromNetwork(
                     this.sepoliaClient,
                     CONTRACTS.stablepay.address,
                     'sepolia',
-                    merchantAddress
+                    merchantAddress,
+                    fromBlocks?.['sepolia']
                 ),
                 this.fetchEventsFromNetwork(
                     this.etcClient,
                     CONTRACTS['stablepay-etc'].address,
                     'ethereum-classic',
-                    merchantAddress
+                    merchantAddress,
+                    fromBlocks?.['ethereum-classic']
                 ),
                 this.fetchEventsFromNetwork(
                     this.mordorClient,
                     CONTRACTS['stablepay-mordor'].address,
                     'mordor',
-                    merchantAddress
+                    merchantAddress,
+                    fromBlocks?.['mordor']
                 )
             ]);
 
-            const allEvents = [...sepoliaEvents, ...etcEvents, ...mordorEvents];
-            console.log(`Total events found: ${allEvents.length} (Sepolia: ${sepoliaEvents.length}, ETC: ${etcEvents.length}, Mordor: ${mordorEvents.length})`);
+            const allEvents = [...sepoliaResult.events, ...etcResult.events, ...mordorResult.events];
+            console.log(`Total events found: ${allEvents.length} (Sepolia: ${sepoliaResult.events.length}, ETC: ${etcResult.events.length}, Mordor: ${mordorResult.events.length})`);
 
-            return allEvents;
+            return {
+                events: allEvents,
+                highestBlocks: {
+                    'sepolia': sepoliaResult.currentBlock,
+                    'ethereum-classic': etcResult.currentBlock,
+                    'mordor': mordorResult.currentBlock
+                }
+            };
         } catch (err) {
             console.error("Error fetching events:", err);
             console.log("Error message:", err instanceof Error ? err.message : String(err));
