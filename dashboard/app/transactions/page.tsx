@@ -102,7 +102,7 @@ export default function TransactionsPage() {
     sortDirectionOptions,
   } = useTransactions();
 
-  const [selectedTransaction, setSelectedTransaction] = useState<any>(null)
+  const [selectedTransaction, setSelectedTransaction] = useState<(typeof transactions)[number] | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const selectedRiskLevel = selectedTransaction
     ? getRiskLevel(selectedTransaction.amountSC)
@@ -267,7 +267,7 @@ export default function TransactionsPage() {
                 {/* Sort By */}
                 <div className="flex items-center gap-2">
                   <ArrowUpDown className="size-4 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">Sort by:</span>
+                  <label htmlFor="sort-by-select" className="text-sm text-muted-foreground">Sort by:</label>
                   <select
                     id="sort-by-select"
                     value={sortBy}
@@ -305,9 +305,9 @@ export default function TransactionsPage() {
 
                 {/* Rows per page */}
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">
+                  <label htmlFor="page-size-select" className="text-sm text-muted-foreground">
                     Rows per page:
-                  </span>
+                  </label>
                   <select
                     id="page-size-select"
                     value={pageSize}

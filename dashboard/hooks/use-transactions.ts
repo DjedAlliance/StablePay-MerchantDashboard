@@ -1,5 +1,9 @@
+"use client";
+
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { transactionService, TransactionEvent } from '@/lib/transaction-service';
+import { parseUnits } from 'viem';
+import { transactionService } from '@/lib/transaction-service';
+import type { TransactionEvent } from '@/lib/transaction-service';
 import { useWallet } from './use-wallet';
 
 // Cache transactions in localStorage
@@ -53,13 +57,13 @@ export function useTransactions() {
 
     // Helper to persist current transactions to cache (including timestamps)
     const persistToCache = useCallback((events: TransactionEvent[], wallet: string) => {
-        const serializableEvents = events.map(event => ({
+        const serializableEvents: CachedData['transactions'] = events.map(event => ({
             ...event,
             blockNumber: event.blockNumber.toString(),
             timestamp: event.timestamp ? event.timestamp.toISOString() : undefined,
         }));
         const cacheData: CachedData = {
-            transactions: serializableEvents as any,
+            transactions: serializableEvents,
             timestamp: Date.now(),
         };
         const cacheKey = `${CACHE_KEY}_${wallet || 'dev'}`;
@@ -125,10 +129,18 @@ export function useTransactions() {
                     return (aTime - bTime) * dir;
                 }
                 case 'amountSC': {
-                    return (parseFloat(a.amountSC) - parseFloat(b.amountSC)) * dir;
+                    const aSC = parseUnits(a.amountSC, 6);
+                    const bSC = parseUnits(b.amountSC, 6);
+                    if (aSC < bSC) return -1 * dir;
+                    if (aSC > bSC) return 1 * dir;
+                    return 0;
                 }
                 case 'amountBC': {
-                    return (parseFloat(a.amountBC) - parseFloat(b.amountBC)) * dir;
+                    const aBC = parseUnits(a.amountBC, 18);
+                    const bBC = parseUnits(b.amountBC, 18);
+                    if (aBC < bBC) return -1 * dir;
+                    if (aBC > bBC) return 1 * dir;
+                    return 0;
                 }
                 default:
                     return 0;
@@ -170,13 +182,16 @@ export function useTransactions() {
     const fetchTimestamps = useCallback(async () => {
         if (timestampsFetched || fetchingTimestamps || transactions.length === 0) return;
 
+        const walletAtStart = latestWalletRef.current;
         try {
             setFetchingTimestamps(true);
             const withTimestamps = await transactionService.fetchTimestampsForEvents(transactions);
+            // Guard: if wallet changed during the async fetch, discard stale results
+            if (latestWalletRef.current !== walletAtStart) return;
             setTransactions(withTimestamps);
             setTimestampsFetched(true);
-            // Update cache with timestamps
-            persistToCache(withTimestamps, latestWalletRef.current);
+            // Update cache with timestamps using the wallet that was active at fetch start
+            persistToCache(withTimestamps, walletAtStart);
         } catch (err) {
             console.error('Error fetching timestamps:', err);
         } finally {

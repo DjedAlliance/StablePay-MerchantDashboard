@@ -1,4 +1,4 @@
-import { createPublicClient, http, formatUnits, defineChain } from 'viem';
+import { createPublicClient, http, formatUnits, defineChain, type PublicClient } from 'viem';
 import { sepolia } from 'viem/chains';
 
 import { NETWORKS, CONTRACTS, DEPLOYMENT_BLOCKS } from './config';
@@ -57,9 +57,9 @@ const mordor = defineChain({
 });
 
 export class TransactionService {
-    private sepoliaClient;
-    private etcClient;
-    private mordorClient;
+    private sepoliaClient: PublicClient;
+    private etcClient: PublicClient;
+    private mordorClient: PublicClient;
 
     constructor() {
         this.sepoliaClient = createPublicClient({
@@ -81,7 +81,7 @@ export class TransactionService {
         return `0x${cleanAddress}`;
     };
 
-    private getClientByChainId(chainId: number): any | null {
+    private getClientByChainId(chainId: number): PublicClient | null {
         switch (chainId) {
             case 11155111: return this.sepoliaClient;   // Sepolia
             case 61:       return this.etcClient;        // ETC Mainnet
@@ -91,7 +91,7 @@ export class TransactionService {
     }
 
     private async fetchEventsFromNetwork(
-        client: any,
+        client: PublicClient,
         contractAddress: string,
         networkKey: string,
         merchantAddress?: string
