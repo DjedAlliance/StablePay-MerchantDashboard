@@ -100,6 +100,9 @@ export default function TransactionsPage() {
     sortByOptions,
     sortByLabels,
     sortDirectionOptions,
+    isFullyLoaded,
+    loadingMore,
+    fetchMore,
   } = useTransactions();
 
   const [selectedTransaction, setSelectedTransaction] = useState<(typeof transactions)[number] | null>(null)
@@ -221,7 +224,12 @@ export default function TransactionsPage() {
             <div className="flex items-start justify-between">
               <div>
                 <div className="text-sm text-muted-foreground mb-2">TOTAL TRANSACTIONS</div>
-                <div className="text-4xl font-bold">{loading ? "..." : transactionStats.total}</div>
+                <div className="text-4xl font-bold">
+                  {loading && transactionStats.total === 0 ? "..." : (isFullyLoaded || transactionStats.total === 0 ? transactionStats.total : `${transactionStats.total}+`)}
+                </div>
+                {!isFullyLoaded && transactionStats.total >= 1000 && !loading && (
+                  <div className="text-xs text-muted-foreground mt-1 text-primary font-medium">1k+ limit reached</div>
+                )}
               </div>
               <Shield className="size-8 text-foreground" />
             </div>
@@ -341,7 +349,7 @@ export default function TransactionsPage() {
                 </tr>
               </thead>
               <tbody>
-                {loading ? (
+                {loading && transactionStats.total === 0 ? (
                   <tr>
                     <td colSpan={9} className="px-6 py-8 text-center text-muted-foreground">
                       Loading transactions from blockchain...
@@ -438,8 +446,24 @@ export default function TransactionsPage() {
               {/* Showing X-Y of Z */}
               <div className="text-sm text-muted-foreground">
                 Showing <span className="font-medium text-foreground">{startItem}</span>–<span className="font-medium text-foreground">{endItem}</span> of{" "}
-                <span className="font-medium text-foreground">{totalCount}</span> transactions
+                <span className="font-medium text-foreground">{isFullyLoaded || totalCount === 0 ? totalCount : `${totalCount}+`}</span> transactions
               </div>
+
+              {!isFullyLoaded && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={fetchMore} 
+                  disabled={loadingMore}
+                  className="mx-auto border-primary/20 hover:bg-primary/10 text-primary"
+                >
+                  {loadingMore ? (
+                    <><Loader2 className="size-4 mr-2 animate-spin" /> Fetching More...</>
+                  ) : (
+                    'Fetch More Transactions'
+                  )}
+                </Button>
+              )}
 
               {/* Page navigation */}
               <div className="flex items-center gap-1">
@@ -525,8 +549,8 @@ export default function TransactionsPage() {
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="max-w-2xl bg-card border-border/40">
           <DialogHeader className="relative">
-            <DialogTitle className="text-3xl font-display mb-2">{selectedTransaction?.merchant}</DialogTitle>
-            <p className="text-muted-foreground font-mono">{selectedTransaction?.id}</p>
+            <DialogTitle className="text-3xl font-display mb-2">{selectedTransaction ? formatAddress(selectedTransaction.buyer) : ''}</DialogTitle>
+            <p className="text-muted-foreground font-mono">{selectedTransaction?.transactionHash}</p>
           </DialogHeader>
 
           <div className="grid grid-cols-2 gap-8 py-6">
@@ -534,29 +558,21 @@ export default function TransactionsPage() {
               <div>
                 <div className="text-sm text-muted-foreground mb-2">STATUS</div>
                 <div className="flex items-center gap-2">
-                  <div
-                    className={`size-2 rounded-full ${
-                      selectedTransaction?.status === "completed"
-                        ? "bg-green-500"
-                        : selectedTransaction?.status === "pending"
-                          ? "bg-yellow-500"
-                          : "bg-red-500"
-                    }`}
-                  />
-                  <span className="uppercase text-lg">{selectedTransaction?.status}</span>
+                  <div className="size-2 rounded-full bg-green-500" />
+                  <span className="uppercase text-lg">COMPLETED</span>
                 </div>
               </div>
 
               <div>
-                <div className="text-sm text-muted-foreground mb-2">MISSIONS COMPLETED</div>
-                <div className="text-2xl font-bold">{selectedTransaction?.amount}</div>
+                <div className="text-sm text-muted-foreground mb-2">STABLECOIN AMOUNT</div>
+                <div className="text-2xl font-bold">{selectedTransaction?.amountSC} SC</div>
               </div>
             </div>
 
             <div className="space-y-6">
               <div>
-                <div className="text-sm text-muted-foreground mb-2">LOCATION</div>
-                <div className="text-lg">{selectedTransaction?.location}</div>
+                <div className="text-sm text-muted-foreground mb-2">NETWORK</div>
+                <div className="text-lg">{selectedTransaction?.networkName}</div>
               </div>
 
               <div>
@@ -572,12 +588,15 @@ export default function TransactionsPage() {
           </div>
 
           <div className="flex gap-3 pt-4 border-t border-border/40">
-            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">Assign Mission</Button>
-            <Button variant="outline" className="border-border/40 bg-transparent">
-              View History
+            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" asChild>
+                <a href={selectedTransaction ? getExplorerUrl(selectedTransaction.chainId, selectedTransaction.transactionHash) : '#'} target="_blank" rel="noreferrer">
+                    View on Explorer
+                </a>
             </Button>
-            <Button variant="outline" className="border-border/40 bg-transparent">
-              Send Message
+            <Button variant="outline" className="border-border/40 bg-transparent" onClick={() => {
+                if (selectedTransaction) navigator.clipboard.writeText(selectedTransaction.buyer);
+            }}>
+              Copy Buyer Address
             </Button>
           </div>
         </DialogContent>

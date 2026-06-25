@@ -16,6 +16,11 @@ export interface TransactionEvent {
     networkName: string;
 }
 
+export interface NetworkCursorResult {
+    cursor: string;   // block number as string; '0' means fully scanned
+    hasMore: boolean;
+}
+
 const etcMainnet = defineChain({
     id: 61,
     name: 'Ethereum Classic',
@@ -56,6 +61,10 @@ const mordor = defineChain({
     testnet: true,
 });
 
+const STABLEPAY_EVENT = parseAbiItem(
+    'event BoughtStableCoins(address indexed buyer, address indexed receiver, uint256 amountSC, uint256 amountBC)'
+);
+
 export class TransactionService {
     private sepoliaClient: PublicClient;
     private etcClient: PublicClient;
@@ -81,6 +90,24 @@ export class TransactionService {
         return `0x${cleanAddress}`;
     };
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    private mapRawEvent(event: any, network: { chainId: number; name: string }): TransactionEvent {
+        const rawData = event.data.slice(2);
+        const amountSCHex = '0x' + rawData.slice(0, 64);
+        const amountBCHex = '0x' + rawData.slice(64);
+
+        return {
+            buyer: this.formatAddress(event.topics[1]),
+            receiver: this.formatAddress(event.topics[2]),
+            amountSC: formatUnits(BigInt(amountSCHex), 6),
+            amountBC: formatUnits(BigInt(amountBCHex), 18),
+            blockNumber: event.blockNumber,
+            transactionHash: event.transactionHash,
+            chainId: network.chainId,
+            networkName: network.name,
+        };
+    }
+
     private getClientByChainId(chainId: number): PublicClient | null {
         switch (chainId) {
             case 11155111: return this.sepoliaClient;   // Sepolia
@@ -100,6 +127,7 @@ export class TransactionService {
             const currentBlock = await client.getBlockNumber();
             const startBlock = DEPLOYMENT_BLOCKS[networkKey] || BigInt(0);
             const maxBlockRange = BigInt(49999);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             let allEvents: any[] = [];
 
             let fromBlock = startBlock;
@@ -108,10 +136,9 @@ export class TransactionService {
 
                 const purchaseEvents = await client.getLogs({
                     address: contractAddress as `0x${string}`,
-                    event: parseAbiItem('event BoughtStableCoins(address indexed buyer, address indexed receiver, uint256 amountSC, uint256 amountBC)'),
-                    args: merchantAddress ? {
-                        receiver: merchantAddress
-                    } as any : undefined,
+                    event: STABLEPAY_EVENT,
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    args: merchantAddress ? { receiver: merchantAddress } as any : undefined,
                     fromBlock,
                     toBlock
                 });
@@ -121,25 +148,82 @@ export class TransactionService {
             }
 
             const network = NETWORKS[networkKey];
-            return allEvents.map(event => {
-                const rawData = event.data.slice(2);
-                const amountSCHex = '0x' + rawData.slice(0, 64);
-                const amountBCHex = '0x' + rawData.slice(64);
-
-                return {
-                    buyer: this.formatAddress(event.topics[1]),
-                    receiver: this.formatAddress(event.topics[2]),
-                    amountSC: formatUnits(BigInt(amountSCHex), 6),
-                    amountBC: formatUnits(BigInt(amountBCHex), 18),
-                    blockNumber: event.blockNumber,
-                    transactionHash: event.transactionHash,
-                    chainId: network.chainId,
-                    networkName: network.name
-                };
-            });
+            return allEvents.map(event => this.mapRawEvent(event, network));
         } catch (err) {
             console.error(`Error fetching events from ${networkKey}:`, err);
             return [];
+        }
+    }
+
+    /**
+     * Fetch events from a single network in reverse block order (newest first).
+     * Calls `onChunk` with each batch of events as they arrive.
+     * Respects `AbortSignal` to stop early (e.g. when event cap is reached).
+     *
+     * @param resumeFromBlock - If provided, start scanning from this block downward
+     *   (exclusive upper bound for resume). Used by "Fetch More".
+     */
+    private async fetchEventsFromNetworkReverse(
+        client: PublicClient,
+        contractAddress: string,
+        networkKey: string,
+        merchantAddress: string | undefined,
+        onChunk: (events: TransactionEvent[]) => void,
+        options?: {
+            signal?: AbortSignal;
+            resumeFromBlock?: bigint;
+        }
+    ): Promise<NetworkCursorResult> {
+        const deploymentBlock = DEPLOYMENT_BLOCKS[networkKey] || BigInt(0);
+        const maxBlockRange = BigInt(49999);
+        const network = NETWORKS[networkKey];
+        let toBlock = BigInt(0);
+
+        try {
+            toBlock = options?.resumeFromBlock ?? await client.getBlockNumber();
+
+            while (toBlock >= deploymentBlock) {
+                if (options?.signal?.aborted) {
+                    return { cursor: toBlock.toString(), hasMore: true };
+                }
+
+                const fromBlock = toBlock - maxBlockRange < deploymentBlock
+                    ? deploymentBlock
+                    : toBlock - maxBlockRange;
+
+                const purchaseEvents = await client.getLogs({
+                    address: contractAddress as `0x${string}`,
+                    event: STABLEPAY_EVENT,
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    args: merchantAddress ? { receiver: merchantAddress } as any : undefined,
+                    fromBlock,
+                    toBlock,
+                });
+
+                if (purchaseEvents.length > 0) {
+                    // Logs from getLogs are ascending (oldest first). For "newest first", we reverse them.
+                    const events = purchaseEvents
+                        .map(event => this.mapRawEvent(event, network))
+                        .reverse();
+                    onChunk(events);
+                }
+
+                const nextToBlock = fromBlock - BigInt(1);
+                if (nextToBlock < deploymentBlock) {
+                    // Fully scanned this network
+                    return { cursor: '0', hasMore: false };
+                }
+                toBlock = nextToBlock;
+            }
+
+            return { cursor: '0', hasMore: false };
+        } catch (err) {
+            // If aborted mid-RPC-call, return cursor so "Fetch More" can resume
+            if (options?.signal?.aborted) {
+                return { cursor: toBlock.toString(), hasMore: true };
+            }
+            console.error(`Error fetching events from ${networkKey}:`, err);
+            return { cursor: '0', hasMore: false };
         }
     }
 
@@ -233,6 +317,61 @@ export class TransactionService {
             console.log("Error message:", err instanceof Error ? err.message : String(err));
             throw err;
         }
+    }
+
+    /**
+     * Progressively fetch events from all networks (newest first).
+     * Calls `onChunk` as events arrive from each network.
+     * All 3 networks are scanned in parallel for speed.
+     *
+     * @param merchantAddress - Filter events by merchant/receiver address
+     * @param onChunk - Called with each batch of events as they arrive
+     * @param options.signal - AbortSignal to cancel the fetch (e.g. when cap is reached)
+     * @param options.cursors - Resume cursors from a previous fetch (from "Fetch More")
+     * @returns Per-network cursor results for resuming later
+     */
+    async fetchStableCoinPurchasesProgressive(
+        merchantAddress: string | undefined,
+        onChunk: (events: TransactionEvent[]) => void,
+        options?: {
+            signal?: AbortSignal;
+            cursors?: Record<string, string>;
+        }
+    ): Promise<Record<string, NetworkCursorResult>> {
+        const networkConfigs = [
+            { client: this.sepoliaClient, contract: CONTRACTS.stablepay.address, key: 'sepolia' },
+            { client: this.etcClient, contract: CONTRACTS['stablepay-etc'].address, key: 'ethereum-classic' },
+            { client: this.mordorClient, contract: CONTRACTS['stablepay-mordor'].address, key: 'mordor' },
+        ];
+
+        const results = await Promise.all(
+            networkConfigs.map(async ({ client, contract, key }) => {
+                // Skip networks that are already fully scanned
+                const cursorStr = options?.cursors?.[key];
+                if (cursorStr === '0') {
+                    return { key, cursor: '0', hasMore: false };
+                }
+
+                const resumeFromBlock = cursorStr ? BigInt(cursorStr) : undefined;
+
+                const result = await this.fetchEventsFromNetworkReverse(
+                    client,
+                    contract,
+                    key,
+                    merchantAddress,
+                    onChunk,
+                    { signal: options?.signal, resumeFromBlock }
+                );
+
+                return { key, ...result };
+            })
+        );
+
+        const resultMap: Record<string, NetworkCursorResult> = {};
+        for (const r of results) {
+            resultMap[r.key] = { cursor: r.cursor, hasMore: r.hasMore };
+        }
+        return resultMap;
     }
 }
 

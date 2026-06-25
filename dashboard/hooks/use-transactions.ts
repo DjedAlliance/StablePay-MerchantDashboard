@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { parseUnits } from 'viem';
 import { transactionService } from '@/lib/transaction-service';
-import type { TransactionEvent } from '@/lib/transaction-service';
+import type { TransactionEvent, NetworkCursorResult } from '@/lib/transaction-service';
 import { useWallet } from './use-wallet';
 
 // Cache transactions in localStorage
@@ -33,6 +33,8 @@ interface CachedData {
         timestamp?: string; // ISO string
     })[];
     timestamp: number; // cache creation time
+    isFullyLoaded?: boolean;
+    networkCursors?: Record<string, string>;
 }
 
 export function useTransactions() {
@@ -44,6 +46,13 @@ export function useTransactions() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [hasFetched, setHasFetched] = useState(false);
+    
+    // Progressive fetch state
+    const [isFullyLoaded, setIsFullyLoaded] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [networkCursors, setNetworkCursors] = useState<Record<string, string>>({});
+    const abortControllerRef = useRef<AbortController | null>(null);
+    const MAX_EVENTS = 1000;
 
     // Pagination state
     const [currentPage, setCurrentPage] = useState(1);
@@ -56,7 +65,7 @@ export function useTransactions() {
     const [timestampsFetched, setTimestampsFetched] = useState(false);
 
     // Helper to persist current transactions to cache (including timestamps)
-    const persistToCache = useCallback((events: TransactionEvent[], wallet: string) => {
+    const persistToCache = useCallback((events: TransactionEvent[], wallet: string, fullyLoaded: boolean, cursors: Record<string, string>) => {
         const serializableEvents: CachedData['transactions'] = events.map(event => ({
             ...event,
             blockNumber: event.blockNumber.toString(),
@@ -65,6 +74,8 @@ export function useTransactions() {
         const cacheData: CachedData = {
             transactions: serializableEvents,
             timestamp: Date.now(),
+            isFullyLoaded: fullyLoaded,
+            networkCursors: cursors,
         };
         const cacheKey = `${CACHE_KEY}_${wallet || 'dev'}`;
         try {
@@ -90,7 +101,7 @@ export function useTransactions() {
         const cached = localStorage.getItem(cacheKey);
         if (cached) {
             try {
-                const { transactions: cachedTransactions, timestamp }: CachedData = JSON.parse(cached);
+                const { transactions: cachedTransactions, timestamp, isFullyLoaded: cachedFullyLoaded, networkCursors: cachedCursors }: CachedData = JSON.parse(cached);
                 const isExpired = Date.now() - timestamp > CACHE_EXPIRY;
 
                 if (!isExpired && cachedTransactions.length > 0) {
@@ -101,6 +112,9 @@ export function useTransactions() {
                     }));
                     setTransactions(restoredTransactions);
                     setHasFetched(true);
+                    if (cachedFullyLoaded !== undefined) setIsFullyLoaded(cachedFullyLoaded);
+                    if (cachedCursors) setNetworkCursors(cachedCursors);
+                    
                     // If cached data already has timestamps, mark as fetched
                     const hasTimestamps = restoredTransactions.some(tx => tx.timestamp);
                     if (hasTimestamps) setTimestampsFetched(true);
@@ -191,13 +205,13 @@ export function useTransactions() {
             setTransactions(withTimestamps);
             setTimestampsFetched(true);
             // Update cache with timestamps using the wallet that was active at fetch start
-            persistToCache(withTimestamps, walletAtStart);
+            persistToCache(withTimestamps, walletAtStart, isFullyLoaded, networkCursors);
         } catch (err) {
             console.error('Error fetching timestamps:', err);
         } finally {
             setFetchingTimestamps(false);
         }
-    }, [timestampsFetched, fetchingTimestamps, transactions, persistToCache]);
+    }, [timestampsFetched, fetchingTimestamps, transactions, persistToCache, isFullyLoaded, networkCursors]);
 
     // When sort changes to timestamp, auto-fetch timestamps if not already done
     const changeSortBy = useCallback((newSortBy: SortBy) => {
@@ -225,21 +239,113 @@ export function useTransactions() {
         try {
             setLoading(true);
             setError(null);
+            setIsFullyLoaded(false);
+            setNetworkCursors({});
             if (!isDevelopment && !requestWallet) throw new Error('Connect a wallet to fetch transactions');
-            const events = await transactionService.fetchStableCoinPurchases(requestWallet || undefined);
-            if (latestWalletRef.current !== requestWallet) return;
-            setTransactions(events);
-            setHasFetched(true);
-            setCurrentPage(1);
-            setTimestampsFetched(false); // Fresh data, timestamps not fetched yet
 
-            // Cache the data
-            persistToCache(events, requestWallet);
+            if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
+            }
+            const abortController = new AbortController();
+            abortControllerRef.current = abortController;
+
+            let currentEvents: TransactionEvent[] = [];
+            let hitLimit = false;
+
+            const cursors = await transactionService.fetchStableCoinPurchasesProgressive(
+                requestWallet || undefined,
+                (chunk) => {
+                    if (latestWalletRef.current !== requestWallet) return;
+                    currentEvents = [...currentEvents, ...chunk];
+                    if (currentEvents.length >= MAX_EVENTS) {
+                        currentEvents = currentEvents.slice(0, MAX_EVENTS);
+                        hitLimit = true;
+                        abortController.abort();
+                    }
+                    setTransactions(currentEvents);
+                    setHasFetched(true);
+                    setCurrentPage(1);
+                },
+                { signal: abortController.signal }
+            );
+
+            if (latestWalletRef.current !== requestWallet) return;
+
+            const newCursors: Record<string, string> = {};
+            for (const [key, res] of Object.entries(cursors)) {
+                newCursors[key] = res.cursor;
+            }
+            setNetworkCursors(newCursors);
+            const allScanned = Object.values(cursors).every(c => c.cursor === '0');
+            setIsFullyLoaded(allScanned);
+            
+            setTimestampsFetched(false);
+            persistToCache(currentEvents, requestWallet, allScanned, newCursors);
         } catch (err) {
             console.error('Error fetching transactions:', err);
             setError(err instanceof Error ? err.message : 'Failed to fetch transactions');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchMore = async () => {
+        if (isFullyLoaded || loadingMore || Object.keys(networkCursors).length === 0) return;
+        const requestWallet = latestWalletRef.current;
+        try {
+            setLoadingMore(true);
+            setError(null);
+
+            if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
+            }
+            const abortController = new AbortController();
+            abortControllerRef.current = abortController;
+
+            let newEvents: TransactionEvent[] = [];
+            let hitLimit = false;
+            const currentTotal = transactions.length;
+
+            const cursors = await transactionService.fetchStableCoinPurchasesProgressive(
+                requestWallet || undefined,
+                (chunk) => {
+                    if (latestWalletRef.current !== requestWallet) return;
+                    newEvents = [...newEvents, ...chunk];
+                    const totalCombined = currentTotal + newEvents.length;
+                    
+                    if (totalCombined >= MAX_EVENTS) {
+                        const excess = totalCombined - MAX_EVENTS;
+                        newEvents = newEvents.slice(0, newEvents.length - excess);
+                        hitLimit = true;
+                        abortController.abort();
+                    }
+                    setTransactions(prev => [...prev.slice(0, currentTotal), ...newEvents]);
+                },
+                { signal: abortController.signal, cursors: networkCursors }
+            );
+
+            if (latestWalletRef.current !== requestWallet) return;
+
+            const newCursors: Record<string, string> = {};
+            for (const [key, res] of Object.entries(cursors)) {
+                newCursors[key] = res.cursor;
+            }
+            setNetworkCursors(newCursors);
+            const allScanned = Object.values(cursors).every(c => c.cursor === '0');
+            setIsFullyLoaded(allScanned);
+
+            setTimestampsFetched(false);
+            
+            setTransactions(prev => {
+                persistToCache(prev, requestWallet, allScanned, newCursors);
+                return prev;
+            });
+            
+        } catch (err) {
+            console.error('Error fetching more transactions:', err);
+            setError(err instanceof Error ? err.message : 'Failed to fetch more transactions');
+        } finally {
+            setLoadingMore(false);
         }
     };
 
@@ -258,7 +364,10 @@ export function useTransactions() {
         loading,
         error,
         hasFetched,
+        isFullyLoaded,
+        loadingMore,
         fetchTransactions,
+        fetchMore,
         clearCache,
         // Pagination
         currentPage,
