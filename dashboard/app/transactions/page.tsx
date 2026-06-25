@@ -100,7 +100,7 @@ export default function TransactionsPage() {
     sortByOptions,
     sortByLabels,
     sortDirectionOptions,
-    isFullyLoaded,
+    isAllTransactionsFetched,
     loadingMore,
     fetchMore,
   } = useTransactions();
@@ -225,9 +225,9 @@ export default function TransactionsPage() {
               <div>
                 <div className="text-sm text-muted-foreground mb-2">TOTAL TRANSACTIONS</div>
                 <div className="text-4xl font-bold">
-                  {loading && transactionStats.total === 0 ? "..." : (isFullyLoaded || transactionStats.total === 0 ? transactionStats.total : `${transactionStats.total}+`)}
+                  {loading && transactionStats.total === 0 ? "..." : (!isAllTransactionsFetched && transactionStats.total !== 0 ? `${transactionStats.total}+` : transactionStats.total)}
                 </div>
-                {!isFullyLoaded && transactionStats.total >= 1000 && !loading && (
+                {!isAllTransactionsFetched && transactionStats.total >= 1000 && !loading && (
                   <div className="text-xs text-muted-foreground mt-1 text-primary font-medium">1k+ limit reached</div>
                 )}
               </div>
@@ -446,15 +446,15 @@ export default function TransactionsPage() {
               {/* Showing X-Y of Z */}
               <div className="text-sm text-muted-foreground">
                 Showing <span className="font-medium text-foreground">{startItem}</span>–<span className="font-medium text-foreground">{endItem}</span> of{" "}
-                <span className="font-medium text-foreground">{isFullyLoaded || totalCount === 0 ? totalCount : `${totalCount}+`}</span> transactions
+                <span className="font-medium text-foreground">{!isAllTransactionsFetched && totalCount !== 0 ? `${totalCount}+` : totalCount}</span> transactions
               </div>
 
-              {!isFullyLoaded && (
+              {!isAllTransactionsFetched && totalCount !== 0 ? (
                 <Button 
                   variant="outline" 
                   size="sm" 
                   onClick={fetchMore} 
-                  disabled={loadingMore}
+                  disabled={loadingMore || loading}
                   className="mx-auto border-primary/20 hover:bg-primary/10 text-primary"
                 >
                   {loadingMore ? (
@@ -463,7 +463,9 @@ export default function TransactionsPage() {
                     'Fetch More Transactions'
                   )}
                 </Button>
-              )}
+              ) : isAllTransactionsFetched ? (
+                <div className="mx-auto text-sm text-muted-foreground font-medium">No more transactions</div>
+              ) : null}
 
               {/* Page navigation */}
               <div className="flex items-center gap-1">

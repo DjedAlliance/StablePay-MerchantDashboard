@@ -33,7 +33,7 @@ interface CachedData {
         timestamp?: string; // ISO string
     })[];
     timestamp: number; // cache creation time
-    isFullyLoaded?: boolean;
+    isAllTransactionsFetched?: boolean;
     networkCursors?: Record<string, string>;
 }
 
@@ -46,9 +46,9 @@ export function useTransactions() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [hasFetched, setHasFetched] = useState(false);
-    
+
     // Progressive fetch state
-    const [isFullyLoaded, setIsFullyLoaded] = useState(false);
+    const [isAllTransactionsFetched, setIsAllTransactionsFetched] = useState(false);
     const [loadingMore, setLoadingMore] = useState(false);
     const [networkCursors, setNetworkCursors] = useState<Record<string, string>>({});
     const abortControllerRef = useRef<AbortController | null>(null);
@@ -74,7 +74,7 @@ export function useTransactions() {
         const cacheData: CachedData = {
             transactions: serializableEvents,
             timestamp: Date.now(),
-            isFullyLoaded: fullyLoaded,
+            isAllTransactionsFetched: fullyLoaded,
             networkCursors: cursors,
         };
         const cacheKey = `${CACHE_KEY}_${wallet || 'dev'}`;
@@ -101,7 +101,7 @@ export function useTransactions() {
         const cached = localStorage.getItem(cacheKey);
         if (cached) {
             try {
-                const { transactions: cachedTransactions, timestamp, isFullyLoaded: cachedFullyLoaded, networkCursors: cachedCursors }: CachedData = JSON.parse(cached);
+                const { transactions: cachedTransactions, timestamp, isAllTransactionsFetched: cachedFullyLoaded, networkCursors: cachedCursors }: CachedData = JSON.parse(cached);
                 const isExpired = Date.now() - timestamp > CACHE_EXPIRY;
 
                 if (!isExpired && cachedTransactions.length > 0) {
@@ -112,9 +112,9 @@ export function useTransactions() {
                     }));
                     setTransactions(restoredTransactions);
                     setHasFetched(true);
-                    if (cachedFullyLoaded !== undefined) setIsFullyLoaded(cachedFullyLoaded);
+                    if (cachedFullyLoaded !== undefined) setIsAllTransactionsFetched(cachedFullyLoaded);
                     if (cachedCursors) setNetworkCursors(cachedCursors);
-                    
+
                     // If cached data already has timestamps, mark as fetched
                     const hasTimestamps = restoredTransactions.some(tx => tx.timestamp);
                     if (hasTimestamps) setTimestampsFetched(true);
@@ -202,16 +202,31 @@ export function useTransactions() {
             const withTimestamps = await transactionService.fetchTimestampsForEvents(transactions);
             // Guard: if wallet changed during the async fetch, discard stale results
             if (latestWalletRef.current !== walletAtStart) return;
-            setTransactions(withTimestamps);
+            setTransactions(prev => {
+                const timestampMap = new Map<string, Date>();
+                withTimestamps.forEach(tx => {
+                    if (tx.timestamp) timestampMap.set(tx.transactionHash, tx.timestamp);
+                });
+                
+                const updatedTransactions = prev.map(tx => {
+                    const ts = timestampMap.get(tx.transactionHash);
+                    if (!tx.timestamp && ts) {
+                        return { ...tx, timestamp: ts };
+                    }
+                    return tx;
+                });
+                
+                // Update cache with timestamps using the wallet that was active at fetch start
+                persistToCache(updatedTransactions, walletAtStart, isAllTransactionsFetched, networkCursors);
+                return updatedTransactions;
+            });
             setTimestampsFetched(true);
-            // Update cache with timestamps using the wallet that was active at fetch start
-            persistToCache(withTimestamps, walletAtStart, isFullyLoaded, networkCursors);
         } catch (err) {
             console.error('Error fetching timestamps:', err);
         } finally {
             setFetchingTimestamps(false);
         }
-    }, [timestampsFetched, fetchingTimestamps, transactions, persistToCache, isFullyLoaded, networkCursors]);
+    }, [timestampsFetched, fetchingTimestamps, transactions, persistToCache, isAllTransactionsFetched, networkCursors]);
 
     // When sort changes to timestamp, auto-fetch timestamps if not already done
     const changeSortBy = useCallback((newSortBy: SortBy) => {
@@ -239,7 +254,7 @@ export function useTransactions() {
         try {
             setLoading(true);
             setError(null);
-            setIsFullyLoaded(false);
+            setIsAllTransactionsFetched(false);
             setNetworkCursors({});
             if (!isDevelopment && !requestWallet) throw new Error('Connect a wallet to fetch transactions');
 
@@ -277,8 +292,8 @@ export function useTransactions() {
             }
             setNetworkCursors(newCursors);
             const allScanned = Object.values(cursors).every(c => c.cursor === '0');
-            setIsFullyLoaded(allScanned);
-            
+            setIsAllTransactionsFetched(allScanned);
+
             setTimestampsFetched(false);
             persistToCache(currentEvents, requestWallet, allScanned, newCursors);
         } catch (err) {
@@ -290,7 +305,7 @@ export function useTransactions() {
     };
 
     const fetchMore = async () => {
-        if (isFullyLoaded || loadingMore || Object.keys(networkCursors).length === 0) return;
+        if (isAllTransactionsFetched || loadingMore || Object.keys(networkCursors).length === 0) return;
         const requestWallet = latestWalletRef.current;
         try {
             setLoadingMore(true);
@@ -311,11 +326,8 @@ export function useTransactions() {
                 (chunk) => {
                     if (latestWalletRef.current !== requestWallet) return;
                     newEvents = [...newEvents, ...chunk];
-                    const totalCombined = currentTotal + newEvents.length;
-                    
-                    if (totalCombined >= MAX_EVENTS) {
-                        const excess = totalCombined - MAX_EVENTS;
-                        newEvents = newEvents.slice(0, newEvents.length - excess);
+                    if (newEvents.length >= MAX_EVENTS) {
+                        newEvents = newEvents.slice(0, MAX_EVENTS);
                         hitLimit = true;
                         abortController.abort();
                     }
@@ -332,15 +344,15 @@ export function useTransactions() {
             }
             setNetworkCursors(newCursors);
             const allScanned = Object.values(cursors).every(c => c.cursor === '0');
-            setIsFullyLoaded(allScanned);
+            setIsAllTransactionsFetched(allScanned);
 
             setTimestampsFetched(false);
-            
+
             setTransactions(prev => {
                 persistToCache(prev, requestWallet, allScanned, newCursors);
                 return prev;
             });
-            
+
         } catch (err) {
             console.error('Error fetching more transactions:', err);
             setError(err instanceof Error ? err.message : 'Failed to fetch more transactions');
@@ -354,6 +366,8 @@ export function useTransactions() {
         localStorage.removeItem(cacheKey);
         setTransactions([]);
         setHasFetched(false);
+        setIsAllTransactionsFetched(false);
+        setNetworkCursors({});
         setCurrentPage(1);
         setTimestampsFetched(false);
     };
@@ -364,7 +378,7 @@ export function useTransactions() {
         loading,
         error,
         hasFetched,
-        isFullyLoaded,
+        isAllTransactionsFetched,
         loadingMore,
         fetchTransactions,
         fetchMore,
