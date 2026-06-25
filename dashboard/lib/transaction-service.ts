@@ -223,7 +223,7 @@ export class TransactionService {
                 return { cursor: toBlock.toString(), hasMore: true };
             }
             console.error(`Error fetching events from ${networkKey}:`, err);
-            return { cursor: '0', hasMore: false };
+            return { cursor: toBlock.toString(), hasMore: true };
         }
     }
 
