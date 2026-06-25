@@ -27,6 +27,45 @@ const SORT_BY_LABELS: Record<SortBy, string> = {
 };
 export { SORT_BY_LABELS };
 
+export const getRiskLevel = (amount: string): "high" | "medium" | "low" => {
+    const numAmount = parseFloat(amount);
+    if (numAmount > 100) return "high";
+    if (numAmount > 50) return "medium";
+    return "low";
+};
+
+export interface TransactionFilters {
+    buyer: string;
+    receiver: string;
+    status: string;
+    blockMin: string;
+    blockMax: string;
+    blockchain: string;
+    amountSCMin: string;
+    amountSCMax: string;
+    amountBCMin: string;
+    amountBCMax: string;
+    risk: string;
+    timestampStart: string;
+    timestampEnd: string;
+}
+
+export const initialFilters: TransactionFilters = {
+    buyer: '',
+    receiver: '',
+    status: '',
+    blockMin: '',
+    blockMax: '',
+    blockchain: '',
+    amountSCMin: '',
+    amountSCMax: '',
+    amountBCMin: '',
+    amountBCMax: '',
+    risk: '',
+    timestampStart: '',
+    timestampEnd: ''
+};
+
 interface CachedData {
     transactions: (Omit<TransactionEvent, 'blockNumber' | 'timestamp'> & {
         blockNumber: string;
@@ -63,6 +102,19 @@ export function useTransactions() {
     const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
     const [fetchingTimestamps, setFetchingTimestamps] = useState(false);
     const [timestampsFetched, setTimestampsFetched] = useState(false);
+
+    // Filtering state
+    const [filters, setFilters] = useState<TransactionFilters>(initialFilters);
+
+    const clearFilters = useCallback(() => {
+        setFilters(initialFilters);
+        setCurrentPage(1);
+    }, []);
+
+    const applyFilters = useCallback((newFilters: TransactionFilters) => {
+        setFilters(newFilters);
+        setCurrentPage(1);
+    }, []);
 
     // Helper to persist current transactions to cache (including timestamps)
     const persistToCache = useCallback((events: TransactionEvent[], wallet: string, fullyLoaded: boolean, cursors: Record<string, string>) => {
@@ -125,9 +177,35 @@ export function useTransactions() {
         }
     }, [activeAddress, isDevelopment]);
 
-    // Sorted transactions (operates on ALL transactions before pagination)
+    // Filtered transactions
+    const filteredTransactions = useMemo(() => {
+        return transactions.filter(tx => {
+            if (filters.buyer && !tx.buyer.toLowerCase().includes(filters.buyer.toLowerCase())) return false;
+            if (filters.receiver && !tx.receiver.toLowerCase().includes(filters.receiver.toLowerCase())) return false;
+            if (filters.status && filters.status !== 'completed' && filters.status !== 'all') return false; // Assuming all are completed in the mock data
+            
+            if (filters.blockMin && tx.blockNumber < BigInt(filters.blockMin)) return false;
+            if (filters.blockMax && tx.blockNumber > BigInt(filters.blockMax)) return false;
+            if (filters.blockchain && filters.blockchain !== 'all' && tx.networkName !== filters.blockchain) return false;
+            
+            if (filters.amountSCMin && parseFloat(tx.amountSC) < parseFloat(filters.amountSCMin)) return false;
+            if (filters.amountSCMax && parseFloat(tx.amountSC) > parseFloat(filters.amountSCMax)) return false;
+            
+            if (filters.amountBCMin && parseFloat(tx.amountBC) < parseFloat(filters.amountBCMin)) return false;
+            if (filters.amountBCMax && parseFloat(tx.amountBC) > parseFloat(filters.amountBCMax)) return false;
+            
+            if (filters.risk && filters.risk !== 'all' && getRiskLevel(tx.amountSC) !== filters.risk.toLowerCase()) return false;
+            
+            if (filters.timestampStart && (!tx.timestamp || tx.timestamp < new Date(filters.timestampStart))) return false;
+            if (filters.timestampEnd && (!tx.timestamp || tx.timestamp > new Date(filters.timestampEnd))) return false;
+            
+            return true;
+        });
+    }, [transactions, filters]);
+
+    // Sorted transactions (operates on FILTERED transactions before pagination)
     const sortedTransactions = useMemo(() => {
-        const sorted = [...transactions];
+        const sorted = [...filteredTransactions];
         const dir = sortDirection === 'asc' ? 1 : -1;
 
         sorted.sort((a, b) => {
@@ -162,7 +240,7 @@ export function useTransactions() {
         });
 
         return sorted;
-    }, [transactions, sortBy, sortDirection]);
+    }, [filteredTransactions, sortBy, sortDirection]);
 
     // Pagination computed values
     const totalPages = useMemo(() => {
@@ -232,17 +310,16 @@ export function useTransactions() {
     const changeSortBy = useCallback((newSortBy: SortBy) => {
         setSortBy(newSortBy);
         setCurrentPage(1);
-        if (newSortBy === 'timestamp' && !timestampsFetched && transactions.length > 0) {
-            // Will trigger timestamp fetch
-        }
-    }, [timestampsFetched, transactions.length]);
+    }, []);
 
-    // Auto-fetch timestamps when sortBy is 'timestamp' and they haven't been fetched
+    // Auto-fetch timestamps when sortBy is 'timestamp' or timestamp filters are applied and they haven't been fetched
+    const needsTimestamps = sortBy === 'timestamp' || !!filters.timestampStart || !!filters.timestampEnd;
+    
     useEffect(() => {
-        if (sortBy === 'timestamp' && !timestampsFetched && !fetchingTimestamps && transactions.length > 0) {
+        if (needsTimestamps && !timestampsFetched && !fetchingTimestamps && transactions.length > 0) {
             fetchTimestamps();
         }
-    }, [sortBy, timestampsFetched, fetchingTimestamps, transactions.length, fetchTimestamps]);
+    }, [needsTimestamps, timestampsFetched, fetchingTimestamps, transactions.length, fetchTimestamps]);
 
     const changeSortDirection = useCallback((newDir: SortDirection) => {
         setSortDirection(newDir);
@@ -387,10 +464,14 @@ export function useTransactions() {
         currentPage,
         pageSize,
         totalPages,
-        totalCount: transactions.length,
+        totalCount: filteredTransactions.length,
         goToPage,
         changePageSize,
         pageSizeOptions: PAGE_SIZE_OPTIONS,
+        // Filtering
+        filters,
+        applyFilters,
+        clearFilters,
         // Sorting
         sortBy,
         sortDirection,

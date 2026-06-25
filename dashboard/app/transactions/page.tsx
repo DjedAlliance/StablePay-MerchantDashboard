@@ -8,9 +8,10 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import DashboardPageLayout from "@/components/dashboard/layout"
 import CreditCardIcon from "@/components/icons/credit-card"
-import { useTransactions } from "@/hooks/use-transactions"
+import { useTransactions, getRiskLevel } from "@/hooks/use-transactions"
 import type { PageSize, SortBy, SortDirection } from "@/hooks/use-transactions"
 import { NETWORKS } from "@/lib/config"
+import { FilterPanel } from "@/components/transactions/filter-panel"
 
 // Helper function to format address
 const formatAddress = (address: string) => {
@@ -34,13 +35,6 @@ const riskStyles: Record<RiskLevel, string> = {
   medium: "bg-muted text-muted-foreground",
   low: "bg-green-500/20 text-green-500 border-green-500/40",
 }
-
-const getRiskLevel = (amount: string): RiskLevel => {
-  const numAmount = parseFloat(amount);
-  if (numAmount > 100) return "high";
-  if (numAmount > 50) return "medium";
-  return "low";
-};
 
 /**
  * Compute which page numbers to display in the pagination bar.
@@ -103,10 +97,15 @@ export default function TransactionsPage() {
     isAllTransactionsFetched,
     loadingMore,
     fetchMore,
+    // Filters
+    filters,
+    applyFilters,
+    clearFilters,
   } = useTransactions();
 
   const [selectedTransaction, setSelectedTransaction] = useState<(typeof transactions)[number] | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isFilterOpen, setIsFilterOpen] = useState(false)
   const selectedRiskLevel = selectedTransaction
     ? getRiskLevel(selectedTransaction.amountSC)
     : null
@@ -174,9 +173,18 @@ export default function TransactionsPage() {
             <p className="text-muted-foreground">Manage and monitor payment operations</p>
           </div>
           <div className="flex gap-3">
-            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
+            <Button 
+              className="bg-primary hover:bg-primary/90 text-primary-foreground relative"
+              onClick={() => setIsFilterOpen(true)}
+            >
               <Filter className="size-4 mr-2" />
               Filter
+              {Object.values(filters).some(v => v !== '') && (
+                <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500 border-2 border-background"></span>
+                </span>
+              )}
             </Button>
             {!hasFetched ? (
               <Button 
@@ -261,17 +269,18 @@ export default function TransactionsPage() {
         {/* Transaction Table */}
         <div className="bg-card border border-border/40 rounded-lg overflow-hidden flex-1 flex flex-col">
           <div className="p-6 border-b border-border/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <h2 className="text-xl font-serif">TRANSACTION ROSTER</h2>
+            <div className="flex items-center gap-4">
+              <h2 className="text-xl font-serif">TRANSACTION ROSTER</h2>
+              {/* Fetching timestamps indicator */}
+              {hasFetched && fetchingTimestamps && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" />
+                  <span>Fetching timestamps…</span>
+                </div>
+              )}
+            </div>
             {hasFetched && totalCount > 0 && (
               <div className="flex items-center gap-4 flex-wrap">
-                {/* Fetching timestamps indicator */}
-                {fetchingTimestamps && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="size-4 animate-spin" />
-                    <span>Fetching timestamps…</span>
-                  </div>
-                )}
-
                 {/* Sort By */}
                 <div className="flex items-center gap-2">
                   <ArrowUpDown className="size-4 text-muted-foreground" />
@@ -603,6 +612,14 @@ export default function TransactionsPage() {
           </div>
         </DialogContent>
       </Dialog>
+      
+      <FilterPanel 
+        open={isFilterOpen}
+        onOpenChange={setIsFilterOpen}
+        filters={filters}
+        onApplyFilters={applyFilters}
+        onClearFilters={clearFilters}
+      />
       </div>
     </DashboardPageLayout>
   )
