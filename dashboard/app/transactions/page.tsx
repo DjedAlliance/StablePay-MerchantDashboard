@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { Bell, RefreshCw, Filter, Search, Shield, MapPin, Clock, MoreVertical, ExternalLink } from "lucide-react"
+import { Bell, RefreshCw, Filter, Search, Shield, MapPin, Clock, MoreVertical, ExternalLink, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUpDown, ArrowUp, ArrowDown, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import DashboardPageLayout from "@/components/dashboard/layout"
 import CreditCardIcon from "@/components/icons/credit-card"
 import { useTransactions } from "@/hooks/use-transactions"
+import type { PageSize, SortBy, SortDirection } from "@/hooks/use-transactions"
 import { NETWORKS } from "@/lib/config"
 
 // Helper function to format address
@@ -41,24 +42,90 @@ const getRiskLevel = (amount: string): RiskLevel => {
   return "low";
 };
 
+/**
+ * Compute which page numbers to display in the pagination bar.
+ * Always shows first page, last page, and a window around current page.
+ * Gaps are represented by -1 (rendered as ellipsis).
+ */
+function getPageNumbers(currentPage: number, totalPages: number): number[] {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1);
+  }
+
+  const pages: number[] = [];
+  const windowStart = Math.max(2, currentPage - 1);
+  const windowEnd = Math.min(totalPages - 1, currentPage + 1);
+
+  pages.push(1);
+
+  if (windowStart > 2) {
+    pages.push(-1); // ellipsis
+  }
+
+  for (let i = windowStart; i <= windowEnd; i++) {
+    pages.push(i);
+  }
+
+  if (windowEnd < totalPages - 1) {
+    pages.push(-1); // ellipsis
+  }
+
+  pages.push(totalPages);
+
+  return pages;
+}
+
 export default function TransactionsPage() {
-  const { transactions, loading, error, hasFetched, fetchTransactions, clearCache } = useTransactions();
-  const [selectedTransaction, setSelectedTransaction] = useState<any>(null)
+  const {
+    transactions,
+    paginatedTransactions,
+    loading,
+    error,
+    hasFetched,
+    fetchTransactions,
+    clearCache,
+    currentPage,
+    pageSize,
+    totalPages,
+    totalCount,
+    goToPage,
+    changePageSize,
+    pageSizeOptions,
+    // Sorting
+    sortBy,
+    sortDirection,
+    changeSortBy,
+    changeSortDirection,
+    fetchingTimestamps,
+    sortByOptions,
+    sortByLabels,
+    sortDirectionOptions,
+    isAllTransactionsFetched,
+    loadingMore,
+    fetchMore,
+  } = useTransactions();
+
+  const [selectedTransaction, setSelectedTransaction] = useState<(typeof transactions)[number] | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const selectedRiskLevel = selectedTransaction
     ? getRiskLevel(selectedTransaction.amountSC)
     : null
-  
+
   const transactionStats = useMemo(() => {
     return {
-      total: transactions.length,
+      total: totalCount,
     };
-  }, [transactions]);
+  }, [totalCount]);
 
   const handleRowClick = (transaction: (typeof transactions)[0]) => {
     setSelectedTransaction(transaction)
     setIsModalOpen(true)
   }
+
+  // Compute pagination display info
+  const startItem = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const endItem = Math.min(currentPage * pageSize, totalCount);
+  const pageNumbers = getPageNumbers(currentPage, totalPages);
 
   return (
     <DashboardPageLayout
@@ -157,7 +224,12 @@ export default function TransactionsPage() {
             <div className="flex items-start justify-between">
               <div>
                 <div className="text-sm text-muted-foreground mb-2">TOTAL TRANSACTIONS</div>
-                <div className="text-4xl font-bold">{loading ? "..." : transactionStats.total}</div>
+                <div className="text-4xl font-bold">
+                  {loading && transactionStats.total === 0 ? "..." : (!isAllTransactionsFetched && transactionStats.total !== 0 ? `${transactionStats.total}+` : transactionStats.total)}
+                </div>
+                {!isAllTransactionsFetched && transactionStats.total >= 1000 && !loading && (
+                  <div className="text-xs text-muted-foreground mt-1 text-primary font-medium">1k+ limit reached</div>
+                )}
               </div>
               <Shield className="size-8 text-foreground" />
             </div>
@@ -188,8 +260,77 @@ export default function TransactionsPage() {
 
         {/* Transaction Table */}
         <div className="bg-card border border-border/40 rounded-lg overflow-hidden flex-1 flex flex-col">
-          <div className="p-6 border-b border-border/40">
+          <div className="p-6 border-b border-border/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <h2 className="text-xl font-serif">TRANSACTION ROSTER</h2>
+            {hasFetched && totalCount > 0 && (
+              <div className="flex items-center gap-4 flex-wrap">
+                {/* Fetching timestamps indicator */}
+                {fetchingTimestamps && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="size-4 animate-spin" />
+                    <span>Fetching timestamps…</span>
+                  </div>
+                )}
+
+                {/* Sort By */}
+                <div className="flex items-center gap-2">
+                  <ArrowUpDown className="size-4 text-muted-foreground" />
+                  <label htmlFor="sort-by-select" className="text-sm text-muted-foreground">Sort by:</label>
+                  <select
+                    id="sort-by-select"
+                    value={sortBy}
+                    onChange={(e) => changeSortBy(e.target.value as SortBy)}
+                    className="bg-background border border-border/40 rounded-md px-2 py-1 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer"
+                  >
+                    {sortByOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {sortByLabels[option]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Sort Direction */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1.5 text-sm h-8 px-2"
+                  onClick={() =>
+                    changeSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+                  }
+                  title={sortDirection === 'asc' ? 'Ascending' : 'Descending'}
+                >
+                  {sortDirection === 'asc' ? (
+                    <ArrowUp className="size-4" />
+                  ) : (
+                    <ArrowDown className="size-4" />
+                  )}
+                  {sortDirection === 'asc' ? 'Asc' : 'Desc'}
+                </Button>
+
+                {/* Divider */}
+                <div className="h-6 w-px bg-border/40 hidden sm:block" />
+
+                {/* Rows per page */}
+                <div className="flex items-center gap-2">
+                  <label htmlFor="page-size-select" className="text-sm text-muted-foreground">
+                    Rows per page:
+                  </label>
+                  <select
+                    id="page-size-select"
+                    value={pageSize}
+                    onChange={(e) => changePageSize(Number(e.target.value) as PageSize)}
+                    className="bg-background border border-border/40 rounded-md px-2 py-1 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer"
+                  >
+                    {pageSizeOptions.map((size) => (
+                      <option key={size} value={size}>
+                        {size}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="overflow-x-auto flex-1">
@@ -200,15 +341,15 @@ export default function TransactionsPage() {
                   <th className="text-left px-6 py-4 text-sm font-medium text-muted-foreground w-40">BUYER</th>
                   <th className="text-left px-6 py-4 text-sm font-medium text-muted-foreground w-40">RECEIVER</th>
                   <th className="text-left px-6 py-4 text-sm font-medium text-muted-foreground w-24">STATUS</th>
-                  <th className="text-left px-6 py-4 text-sm font-medium text-muted-foreground w-32">BLOCK</th>
+                  <th className="text-left px-6 py-4 text-sm font-medium text-muted-foreground w-32">{sortBy === 'timestamp' ? 'TIMESTAMP' : 'BLOCK'}</th>
                   <th className="text-left px-6 py-4 text-sm font-medium text-muted-foreground w-28">BLOCKCHAIN</th>
-                  <th className="text-left px-6 py-4 text-sm font-medium text-muted-foreground w-24">AMOUNT SC</th>
+                  <th className="text-left px-6 py-4 text-sm font-medium text-muted-foreground w-24">{sortBy === 'amountBC' ? 'AMOUNT BC' : 'AMOUNT SC'}</th>
                   <th className="text-left px-6 py-4 text-sm font-medium text-muted-foreground w-24">RISK</th>
                   <th className="text-left px-6 py-4 text-sm font-medium text-muted-foreground w-20">ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
-                {loading ? (
+                {loading && transactionStats.total === 0 ? (
                   <tr>
                     <td colSpan={9} className="px-6 py-8 text-center text-muted-foreground">
                       Loading transactions from blockchain...
@@ -227,7 +368,7 @@ export default function TransactionsPage() {
                     </td>
                   </tr>
                 ) : (
-                  transactions.map((transaction, index) => {
+                  paginatedTransactions.map((transaction, index) => {
                     const riskLevel = getRiskLevel(transaction.amountSC)
                     return (
                     <tr
@@ -245,15 +386,30 @@ export default function TransactionsPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="flex items-center gap-2 whitespace-nowrap">
-                          <MapPin className="size-4 text-muted-foreground" />
-                          #{transaction.blockNumber.toString()}
-                        </div>
+                        {sortBy === 'timestamp' ? (
+                          <div className="flex items-center gap-2 whitespace-nowrap">
+                            <Clock className="size-4 text-muted-foreground" />
+                            {transaction.timestamp
+                              ? transaction.timestamp.toLocaleString('en-US', {
+                                  month: 'short',
+                                  day: '2-digit',
+                                  year: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })
+                              : '—'}
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 whitespace-nowrap">
+                            <MapPin className="size-4 text-muted-foreground" />
+                            #{transaction.blockNumber.toString()}
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-foreground">
                         {transaction.networkName || 'Unknown'}
                       </td>
-                      <td className="px-6 py-4 font-mono whitespace-nowrap">{transaction.amountSC} SC</td>
+                      <td className="px-6 py-4 font-mono whitespace-nowrap">{sortBy === 'amountBC' ? `${transaction.amountBC} BC` : `${transaction.amountSC} SC`}</td>
                       <td className="px-6 py-4">
                         <Badge
                           variant="secondary"
@@ -280,31 +436,123 @@ export default function TransactionsPage() {
                     )
                   })
                 )}
-                {/* Empty rows to fill remaining space */}
-                {Array.from({ length: 10 }).map((_, index) => (
-                  <tr key={`empty-${index}`} className="border-b border-border/40">
-                    <td className="px-6 py-4">&nbsp;</td>
-                    <td className="px-6 py-4">&nbsp;</td>
-                    <td className="px-6 py-4">&nbsp;</td>
-                    <td className="px-6 py-4">&nbsp;</td>
-                    <td className="px-6 py-4">&nbsp;</td>
-                    <td className="px-6 py-4">&nbsp;</td>
-                    <td className="px-6 py-4">&nbsp;</td>
-                    <td className="px-6 py-4">&nbsp;</td>
-                    <td className="px-6 py-4">&nbsp;</td>
-                  </tr>
-                ))}
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Controls */}
+          {hasFetched && totalCount > 0 && (
+            <div className="px-6 py-4 border-t border-border/40 flex flex-col sm:flex-row items-center justify-between gap-4">
+              {/* Showing X-Y of Z */}
+              <div className="text-sm text-muted-foreground">
+                Showing <span className="font-medium text-foreground">{startItem}</span>–<span className="font-medium text-foreground">{endItem}</span> of{" "}
+                <span className="font-medium text-foreground">{!isAllTransactionsFetched && totalCount !== 0 ? `${totalCount}+` : totalCount}</span> transactions
+              </div>
+
+              {!isAllTransactionsFetched && totalCount !== 0 ? (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={fetchMore} 
+                  disabled={loadingMore || loading}
+                  className="mx-auto border-primary/20 hover:bg-primary/10 text-primary"
+                >
+                  {loadingMore ? (
+                    <><Loader2 className="size-4 mr-2 animate-spin" /> Fetching More...</>
+                  ) : (
+                    'Fetch More Transactions'
+                  )}
+                </Button>
+              ) : isAllTransactionsFetched ? (
+                <div className="mx-auto text-sm text-muted-foreground font-medium">No more transactions</div>
+              ) : null}
+
+              {/* Page navigation */}
+              <div className="flex items-center gap-1">
+                {/* First page */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-8"
+                  onClick={() => goToPage(1)}
+                  disabled={currentPage === 1}
+                  aria-label="First page"
+                >
+                  <ChevronsLeft className="size-4" />
+                </Button>
+
+                {/* Previous page */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-8"
+                  onClick={() => goToPage(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  aria-label="Previous page"
+                >
+                  <ChevronLeft className="size-4" />
+                </Button>
+
+                {/* Page number buttons */}
+                {pageNumbers.map((pageNum, idx) =>
+                  pageNum === -1 ? (
+                    <span
+                      key={`ellipsis-${idx}`}
+                      className="px-1 text-muted-foreground select-none"
+                    >
+                      …
+                    </span>
+                  ) : (
+                    <Button
+                      key={pageNum}
+                      variant={pageNum === currentPage ? "default" : "ghost"}
+                      size="icon"
+                      className={`size-8 text-xs font-medium ${
+                        pageNum === currentPage
+                          ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                          : ""
+                      }`}
+                      onClick={() => goToPage(pageNum)}
+                    >
+                      {pageNum}
+                    </Button>
+                  )
+                )}
+
+                {/* Next page */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-8"
+                  onClick={() => goToPage(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  aria-label="Next page"
+                >
+                  <ChevronRight className="size-4" />
+                </Button>
+
+                {/* Last page */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-8"
+                  onClick={() => goToPage(totalPages)}
+                  disabled={currentPage === totalPages}
+                  aria-label="Last page"
+                >
+                  <ChevronsRight className="size-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="max-w-2xl bg-card border-border/40">
           <DialogHeader className="relative">
-            <DialogTitle className="text-3xl font-display mb-2">{selectedTransaction?.merchant}</DialogTitle>
-            <p className="text-muted-foreground font-mono">{selectedTransaction?.id}</p>
+            <DialogTitle className="text-3xl font-display mb-2">{selectedTransaction ? formatAddress(selectedTransaction.buyer) : ''}</DialogTitle>
+            <p className="text-muted-foreground font-mono">{selectedTransaction?.transactionHash}</p>
           </DialogHeader>
 
           <div className="grid grid-cols-2 gap-8 py-6">
@@ -312,29 +560,21 @@ export default function TransactionsPage() {
               <div>
                 <div className="text-sm text-muted-foreground mb-2">STATUS</div>
                 <div className="flex items-center gap-2">
-                  <div
-                    className={`size-2 rounded-full ${
-                      selectedTransaction?.status === "completed"
-                        ? "bg-green-500"
-                        : selectedTransaction?.status === "pending"
-                          ? "bg-yellow-500"
-                          : "bg-red-500"
-                    }`}
-                  />
-                  <span className="uppercase text-lg">{selectedTransaction?.status}</span>
+                  <div className="size-2 rounded-full bg-green-500" />
+                  <span className="uppercase text-lg">COMPLETED</span>
                 </div>
               </div>
 
               <div>
-                <div className="text-sm text-muted-foreground mb-2">MISSIONS COMPLETED</div>
-                <div className="text-2xl font-bold">{selectedTransaction?.amount}</div>
+                <div className="text-sm text-muted-foreground mb-2">STABLECOIN AMOUNT</div>
+                <div className="text-2xl font-bold">{selectedTransaction?.amountSC} SC</div>
               </div>
             </div>
 
             <div className="space-y-6">
               <div>
-                <div className="text-sm text-muted-foreground mb-2">LOCATION</div>
-                <div className="text-lg">{selectedTransaction?.location}</div>
+                <div className="text-sm text-muted-foreground mb-2">NETWORK</div>
+                <div className="text-lg">{selectedTransaction?.networkName}</div>
               </div>
 
               <div>
@@ -350,12 +590,15 @@ export default function TransactionsPage() {
           </div>
 
           <div className="flex gap-3 pt-4 border-t border-border/40">
-            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">Assign Mission</Button>
-            <Button variant="outline" className="border-border/40 bg-transparent">
-              View History
+            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" asChild>
+                <a href={selectedTransaction ? getExplorerUrl(selectedTransaction.chainId, selectedTransaction.transactionHash) : '#'} target="_blank" rel="noreferrer">
+                    View on Explorer
+                </a>
             </Button>
-            <Button variant="outline" className="border-border/40 bg-transparent">
-              Send Message
+            <Button variant="outline" className="border-border/40 bg-transparent" onClick={() => {
+                if (selectedTransaction) navigator.clipboard.writeText(selectedTransaction.buyer);
+            }}>
+              Copy Buyer Address
             </Button>
           </div>
         </DialogContent>
