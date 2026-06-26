@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { Bell, RefreshCw, Filter, Search, Shield, MapPin, Clock, MoreVertical, ExternalLink, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUpDown, ArrowUp, ArrowDown, Loader2, Copy, Check } from "lucide-react"
+import { Bell, RefreshCw, Filter, Search, Shield, MapPin, Clock, MoreVertical, ExternalLink, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUpDown, ArrowUp, ArrowDown, Loader2, Copy, Check, Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -12,6 +12,7 @@ import { useTransactions, getRiskLevel } from "@/hooks/use-transactions"
 import type { PageSize, SortBy, SortDirection } from "@/hooks/use-transactions"
 import { NETWORKS } from "@/lib/config"
 import { FilterPanel } from "@/components/transactions/filter-panel"
+import { ExportDialog } from "@/components/transactions/export-dialog"
 
 // Helper function to format address
 const formatAddress = (address: string) => {
@@ -114,6 +115,7 @@ export default function TransactionsPage() {
     sortDirection,
     changeSortBy,
     changeSortDirection,
+    fetchTimestampsForExport,
     fetchingTimestamps,
     sortByOptions,
     sortByLabels,
@@ -123,6 +125,7 @@ export default function TransactionsPage() {
     fetchMore,
     // Filters
     filters,
+    filteredTransactions,
     applyFilters,
     clearFilters,
   } = useTransactions();
@@ -130,6 +133,7 @@ export default function TransactionsPage() {
   const [selectedTransaction, setSelectedTransaction] = useState<(typeof transactions)[number] | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isFilterOpen, setIsFilterOpen] = useState(false)
+  const [isExportOpen, setIsExportOpen] = useState(false)
   const selectedRiskLevel = selectedTransaction
     ? getRiskLevel(selectedTransaction.amountSC)
     : null
@@ -197,6 +201,13 @@ export default function TransactionsPage() {
             <p className="text-muted-foreground">Manage and monitor payment operations</p>
           </div>
           <div className="flex gap-3">
+            <Button 
+              className="bg-primary hover:bg-primary/90 text-primary-foreground relative"
+              onClick={() => setIsExportOpen(true)}
+            >
+              <Download className="size-4 mr-2" />
+              Export
+            </Button>
             <Button 
               className="bg-primary hover:bg-primary/90 text-primary-foreground relative"
               onClick={() => setIsFilterOpen(true)}
@@ -710,6 +721,16 @@ export default function TransactionsPage() {
         filters={filters}
         onApplyFilters={applyFilters}
         onClearFilters={clearFilters}
+      />
+      <ExportDialog
+        open={isExportOpen}
+        onOpenChange={setIsExportOpen}
+        transactions={transactions}
+        filteredTransactions={filteredTransactions}
+        fetchTimestampsForExport={fetchTimestampsForExport}
+        hasActiveFilters={Object.values(filters).some(v => v !== '')}
+        sortBy={sortBy}
+        sortDirection={sortDirection}
       />
       </div>
     </DashboardPageLayout>
