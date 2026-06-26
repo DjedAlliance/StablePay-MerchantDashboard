@@ -8,7 +8,6 @@ import { useWallet } from './use-wallet';
 
 // Cache transactions in localStorage
 const CACHE_KEY = 'stablepay_transactions';
-const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutes
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200] as const;
 export type PageSize = (typeof PAGE_SIZE_OPTIONS)[number];
@@ -102,9 +101,8 @@ export function useTransactions() {
         if (cached) {
             try {
                 const { transactions: cachedTransactions, timestamp, isAllTransactionsFetched: cachedFullyLoaded, networkCursors: cachedCursors }: CachedData = JSON.parse(cached);
-                const isExpired = Date.now() - timestamp > CACHE_EXPIRY;
 
-                if (!isExpired && cachedTransactions.length > 0) {
+                if (cachedTransactions.length > 0) {
                     const restoredTransactions = cachedTransactions.map(event => ({
                         ...event,
                         blockNumber: BigInt(event.blockNumber),
