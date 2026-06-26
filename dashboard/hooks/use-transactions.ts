@@ -204,8 +204,8 @@ export function useTransactions() {
                     if (cachedCursors) setNetworkCursors(cachedCursors);
 
                     // If cached data already has timestamps, mark as fetched
-                    const hasTimestamps = restoredTransactions.some(tx => tx.timestamp);
-                    if (hasTimestamps) setTimestampsFetched(true);
+                    const hasAllTimestamps = restoredTransactions.length > 0 && restoredTransactions.every(tx => tx.timestamp);
+                    if (hasAllTimestamps) setTimestampsFetched(true);
                 }
             } catch (err) {
                 console.warn('Failed to parse cached transactions:', err);
@@ -220,8 +220,14 @@ export function useTransactions() {
             if (filters.receiver && !tx.receiver.toLowerCase().includes(filters.receiver.toLowerCase())) return false;
             if (filters.status && filters.status !== 'completed' && filters.status !== 'all') return false; // Assuming all are completed in the mock data
             
-            if (filters.blockMin && tx.blockNumber < BigInt(filters.blockMin)) return false;
-            if (filters.blockMax && tx.blockNumber > BigInt(filters.blockMax)) return false;
+            if (filters.blockMin) {
+                if (!/^\d+$/.test(filters.blockMin)) return false;
+                if (tx.blockNumber < BigInt(filters.blockMin)) return false;
+            }
+            if (filters.blockMax) {
+                if (!/^\d+$/.test(filters.blockMax)) return false;
+                if (tx.blockNumber > BigInt(filters.blockMax)) return false;
+            }
             if (filters.blockchain && filters.blockchain !== 'all' && tx.networkName !== filters.blockchain) return false;
             
             if (filters.amountSCMin && parseFloat(tx.amountSC) < parseFloat(filters.amountSCMin)) return false;
@@ -233,7 +239,12 @@ export function useTransactions() {
             if (filters.risk && filters.risk !== 'all' && getRiskLevel(tx.amountSC) !== filters.risk.toLowerCase()) return false;
             
             if (filters.timestampStart && (!tx.timestamp || tx.timestamp < new Date(filters.timestampStart))) return false;
-            if (filters.timestampEnd && (!tx.timestamp || tx.timestamp > new Date(filters.timestampEnd))) return false;
+            if (filters.timestampEnd) {
+                if (!tx.timestamp) return false;
+                const endDate = new Date(filters.timestampEnd);
+                endDate.setHours(23, 59, 59, 999);
+                if (tx.timestamp > endDate) return false;
+            }
             
             return true;
         });

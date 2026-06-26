@@ -123,8 +123,7 @@ export function ExportDialog({
 
       const rows = dataToExport.map((tx, index) => {
         const rowData = columnsToExport.map(col => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          let val: any = '';
+          let val: string | number = '';
           switch (col.id) {
             case 'transactionHash': val = tx.transactionHash; break;
             case 'buyer': val = tx.buyer; break;
@@ -240,6 +239,7 @@ export function ExportDialog({
                     <button
                       key={col.id}
                       onClick={() => handleToggleColumn(col.id)}
+                      aria-pressed={!isExcluded}
                       className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${isExcluded
                           ? 'bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500/20'
                           : 'bg-green-500/10 text-green-500 border-green-500/20 hover:bg-green-500/20'

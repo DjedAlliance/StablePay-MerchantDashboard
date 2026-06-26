@@ -85,8 +85,9 @@ function CopyableCell({ value, displayValue }: { value: string; displayValue?: R
       <div className="pr-6">{displayValue ?? value}</div>
       <button
         onClick={handleCopy}
-        className="absolute right-0 opacity-0 group-hover:opacity-100 transition-opacity bg-background hover:bg-muted p-1 rounded-md z-10"
+        className="absolute right-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100 transition-opacity bg-background hover:bg-muted p-1 rounded-md z-10"
         title="Copy"
+        aria-label="Copy"
       >
         {copied ? <Check className="size-3 text-green-500" /> : <Copy className="size-3 text-muted-foreground" />}
       </button>
@@ -612,17 +613,17 @@ export default function TransactionsPage() {
         <DialogContent className="max-w-2xl bg-card border-border/40">
           <DialogHeader className="relative">
             <DialogTitle className="text-3xl font-display mb-2">{selectedTransaction ? formatAddress(selectedTransaction.buyer) : ''}</DialogTitle>
-            <div className="flex items-center gap-2 text-muted-foreground font-mono">
-               <span className="break-all">{selectedTransaction?.transactionHash}</span>
-               {selectedTransaction && (
-                  <Button variant="ghost" size="icon" className="size-6" onClick={(e) => {
-                     e.stopPropagation();
-                     navigator.clipboard.writeText(selectedTransaction.transactionHash);
-                  }}>
-                    <Copy className="size-3" />
-                  </Button>
-               )}
-            </div>
+             <div className="flex items-center gap-2 text-muted-foreground font-mono">
+                <span className="break-all">{selectedTransaction?.transactionHash}</span>
+                {selectedTransaction && (
+                   <Button variant="ghost" size="icon" className="size-6 focus-visible:ring-1 focus-visible:ring-primary" aria-label="Copy transaction hash" onClick={(e) => {
+                      e.stopPropagation();
+                      navigator.clipboard.writeText(selectedTransaction.transactionHash);
+                   }}>
+                     <Copy className="size-3" />
+                   </Button>
+                )}
+             </div>
           </DialogHeader>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 py-6">
@@ -683,7 +684,7 @@ export default function TransactionsPage() {
                      <span className="text-xs text-muted-foreground">Buyer</span>
                      <div className="flex items-center gap-2">
                        <span className="font-mono text-sm">{selectedTransaction ? formatAddress(selectedTransaction.buyer) : ''}</span>
-                       <Button variant="ghost" size="icon" className="size-5" onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(selectedTransaction?.buyer || ''); }}>
+                       <Button variant="ghost" size="icon" className="size-5" aria-label="Copy buyer address" onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(selectedTransaction?.buyer || ''); }}>
                          <Copy className="size-3" />
                        </Button>
                      </div>
@@ -692,7 +693,7 @@ export default function TransactionsPage() {
                      <span className="text-xs text-muted-foreground">Receiver</span>
                      <div className="flex items-center gap-2">
                        <span className="font-mono text-sm">{selectedTransaction ? formatAddress(selectedTransaction.receiver) : ''}</span>
-                       <Button variant="ghost" size="icon" className="size-5" onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(selectedTransaction?.receiver || ''); }}>
+                       <Button variant="ghost" size="icon" className="size-5" aria-label="Copy receiver address" onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(selectedTransaction?.receiver || ''); }}>
                          <Copy className="size-3" />
                        </Button>
                      </div>
