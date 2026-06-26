@@ -102,7 +102,7 @@ export function useTransactions() {
             try {
                 const { transactions: cachedTransactions, timestamp, isAllTransactionsFetched: cachedFullyLoaded, networkCursors: cachedCursors }: CachedData = JSON.parse(cached);
 
-                if (cachedTransactions.length > 0) {
+                if (Array.isArray(cachedTransactions)) {
                     const restoredTransactions = cachedTransactions.map(event => ({
                         ...event,
                         blockNumber: BigInt(event.blockNumber),
