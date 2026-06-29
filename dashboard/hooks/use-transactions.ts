@@ -26,6 +26,45 @@ const SORT_BY_LABELS: Record<SortBy, string> = {
 };
 export { SORT_BY_LABELS };
 
+export const getRiskLevel = (amount: string): "high" | "medium" | "low" => {
+    const numAmount = parseFloat(amount);
+    if (numAmount > 100) return "high";
+    if (numAmount > 50) return "medium";
+    return "low";
+};
+
+export interface TransactionFilters {
+    buyer: string;
+    receiver: string;
+    status: string;
+    blockMin: string;
+    blockMax: string;
+    blockchain: string;
+    amountSCMin: string;
+    amountSCMax: string;
+    amountBCMin: string;
+    amountBCMax: string;
+    risk: string;
+    timestampStart: string;
+    timestampEnd: string;
+}
+
+export const initialFilters: TransactionFilters = {
+    buyer: '',
+    receiver: '',
+    status: '',
+    blockMin: '',
+    blockMax: '',
+    blockchain: '',
+    amountSCMin: '',
+    amountSCMax: '',
+    amountBCMin: '',
+    amountBCMax: '',
+    risk: '',
+    timestampStart: '',
+    timestampEnd: ''
+};
+
 interface CachedData {
     transactions: (Omit<TransactionEvent, 'blockNumber' | 'timestamp'> & {
         blockNumber: string;
@@ -35,6 +74,44 @@ interface CachedData {
     isAllTransactionsFetched?: boolean;
     networkCursors?: Record<string, string>;
 }
+
+export const sortTransactions = (txs: TransactionEvent[], sortBy: SortBy, sortDirection: SortDirection) => {
+    const sorted = [...txs];
+    const dir = sortDirection === 'asc' ? 1 : -1;
+
+    sorted.sort((a, b) => {
+        switch (sortBy) {
+            case 'blockNumber': {
+                if (a.blockNumber < b.blockNumber) return -1 * dir;
+                if (a.blockNumber > b.blockNumber) return 1 * dir;
+                return 0;
+            }
+            case 'timestamp': {
+                const aTime = a.timestamp?.getTime() ?? 0;
+                const bTime = b.timestamp?.getTime() ?? 0;
+                return (aTime - bTime) * dir;
+            }
+            case 'amountSC': {
+                const aSC = parseUnits(a.amountSC, 6);
+                const bSC = parseUnits(b.amountSC, 6);
+                if (aSC < bSC) return -1 * dir;
+                if (aSC > bSC) return 1 * dir;
+                return 0;
+            }
+            case 'amountBC': {
+                const aBC = parseUnits(a.amountBC, 18);
+                const bBC = parseUnits(b.amountBC, 18);
+                if (aBC < bBC) return -1 * dir;
+                if (aBC > bBC) return 1 * dir;
+                return 0;
+            }
+            default:
+                return 0;
+        }
+    });
+
+    return sorted;
+};
 
 export function useTransactions() {
     const { walletAddress } = useWallet();
@@ -62,6 +139,19 @@ export function useTransactions() {
     const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
     const [fetchingTimestamps, setFetchingTimestamps] = useState(false);
     const [timestampsFetched, setTimestampsFetched] = useState(false);
+
+    // Filtering state
+    const [filters, setFilters] = useState<TransactionFilters>(initialFilters);
+
+    const clearFilters = useCallback(() => {
+        setFilters(initialFilters);
+        setCurrentPage(1);
+    }, []);
+
+    const applyFilters = useCallback((newFilters: TransactionFilters) => {
+        setFilters(newFilters);
+        setCurrentPage(1);
+    }, []);
 
     // Helper to persist current transactions to cache (including timestamps)
     const persistToCache = useCallback((events: TransactionEvent[], wallet: string, fullyLoaded: boolean, cursors: Record<string, string>) => {
@@ -114,8 +204,8 @@ export function useTransactions() {
                     if (cachedCursors) setNetworkCursors(cachedCursors);
 
                     // If cached data already has timestamps, mark as fetched
-                    const hasTimestamps = restoredTransactions.some(tx => tx.timestamp);
-                    if (hasTimestamps) setTimestampsFetched(true);
+                    const hasAllTimestamps = restoredTransactions.length > 0 && restoredTransactions.every(tx => tx.timestamp);
+                    if (hasAllTimestamps) setTimestampsFetched(true);
                 }
             } catch (err) {
                 console.warn('Failed to parse cached transactions:', err);
@@ -123,44 +213,47 @@ export function useTransactions() {
         }
     }, [activeAddress, isDevelopment]);
 
-    // Sorted transactions (operates on ALL transactions before pagination)
-    const sortedTransactions = useMemo(() => {
-        const sorted = [...transactions];
-        const dir = sortDirection === 'asc' ? 1 : -1;
-
-        sorted.sort((a, b) => {
-            switch (sortBy) {
-                case 'blockNumber': {
-                    if (a.blockNumber < b.blockNumber) return -1 * dir;
-                    if (a.blockNumber > b.blockNumber) return 1 * dir;
-                    return 0;
-                }
-                case 'timestamp': {
-                    const aTime = a.timestamp?.getTime() ?? 0;
-                    const bTime = b.timestamp?.getTime() ?? 0;
-                    return (aTime - bTime) * dir;
-                }
-                case 'amountSC': {
-                    const aSC = parseUnits(a.amountSC, 6);
-                    const bSC = parseUnits(b.amountSC, 6);
-                    if (aSC < bSC) return -1 * dir;
-                    if (aSC > bSC) return 1 * dir;
-                    return 0;
-                }
-                case 'amountBC': {
-                    const aBC = parseUnits(a.amountBC, 18);
-                    const bBC = parseUnits(b.amountBC, 18);
-                    if (aBC < bBC) return -1 * dir;
-                    if (aBC > bBC) return 1 * dir;
-                    return 0;
-                }
-                default:
-                    return 0;
+    // Filtered transactions
+    const filteredTransactions = useMemo(() => {
+        return transactions.filter(tx => {
+            if (filters.buyer && !tx.buyer.toLowerCase().includes(filters.buyer.toLowerCase())) return false;
+            if (filters.receiver && !tx.receiver.toLowerCase().includes(filters.receiver.toLowerCase())) return false;
+            if (filters.status && filters.status !== 'completed' && filters.status !== 'all') return false; // Assuming all are completed in the mock data
+            
+            if (filters.blockMin) {
+                if (!/^\d+$/.test(filters.blockMin)) return false;
+                if (tx.blockNumber < BigInt(filters.blockMin)) return false;
             }
+            if (filters.blockMax) {
+                if (!/^\d+$/.test(filters.blockMax)) return false;
+                if (tx.blockNumber > BigInt(filters.blockMax)) return false;
+            }
+            if (filters.blockchain && filters.blockchain !== 'all' && tx.networkName !== filters.blockchain) return false;
+            
+            if (filters.amountSCMin && parseFloat(tx.amountSC) < parseFloat(filters.amountSCMin)) return false;
+            if (filters.amountSCMax && parseFloat(tx.amountSC) > parseFloat(filters.amountSCMax)) return false;
+            
+            if (filters.amountBCMin && parseFloat(tx.amountBC) < parseFloat(filters.amountBCMin)) return false;
+            if (filters.amountBCMax && parseFloat(tx.amountBC) > parseFloat(filters.amountBCMax)) return false;
+            
+            if (filters.risk && filters.risk !== 'all' && getRiskLevel(tx.amountSC) !== filters.risk.toLowerCase()) return false;
+            
+            if (filters.timestampStart && (!tx.timestamp || tx.timestamp < new Date(filters.timestampStart))) return false;
+            if (filters.timestampEnd) {
+                if (!tx.timestamp) return false;
+                const endDate = new Date(filters.timestampEnd);
+                endDate.setHours(23, 59, 59, 999);
+                if (tx.timestamp > endDate) return false;
+            }
+            
+            return true;
         });
+    }, [transactions, filters]);
 
-        return sorted;
-    }, [transactions, sortBy, sortDirection]);
+    // Sorted transactions (operates on FILTERED transactions before pagination)
+    const sortedTransactions = useMemo(() => {
+        return sortTransactions(filteredTransactions, sortBy, sortDirection);
+    }, [filteredTransactions, sortBy, sortDirection]);
 
     // Pagination computed values
     const totalPages = useMemo(() => {
@@ -230,17 +323,43 @@ export function useTransactions() {
     const changeSortBy = useCallback((newSortBy: SortBy) => {
         setSortBy(newSortBy);
         setCurrentPage(1);
-        if (newSortBy === 'timestamp' && !timestampsFetched && transactions.length > 0) {
-            // Will trigger timestamp fetch
-        }
-    }, [timestampsFetched, transactions.length]);
+    }, []);
 
-    // Auto-fetch timestamps when sortBy is 'timestamp' and they haven't been fetched
+    // Auto-fetch timestamps when sortBy is 'timestamp' or timestamp filters are applied and they haven't been fetched
+    const needsTimestamps = sortBy === 'timestamp' || !!filters.timestampStart || !!filters.timestampEnd;
+    
     useEffect(() => {
-        if (sortBy === 'timestamp' && !timestampsFetched && !fetchingTimestamps && transactions.length > 0) {
+        if (needsTimestamps && !timestampsFetched && !fetchingTimestamps && transactions.length > 0) {
             fetchTimestamps();
         }
-    }, [sortBy, timestampsFetched, fetchingTimestamps, transactions.length, fetchTimestamps]);
+    }, [needsTimestamps, timestampsFetched, fetchingTimestamps, transactions.length, fetchTimestamps]);
+
+    // Fetch timestamps specifically for a subset of transactions (e.g., during export)
+    const fetchTimestampsForExport = useCallback(async (txsToFetch: TransactionEvent[]) => {
+        const withTimestamps = await transactionService.fetchTimestampsForEvents(txsToFetch);
+        
+        // Update local state and cache with newly fetched timestamps
+        setTransactions(prev => {
+            const timestampMap = new Map<string, Date>();
+            withTimestamps.forEach(tx => {
+                if (tx.timestamp) timestampMap.set(tx.transactionHash, tx.timestamp);
+            });
+            
+            const updatedTransactions = prev.map(tx => {
+                const ts = timestampMap.get(tx.transactionHash);
+                if (!tx.timestamp && ts) {
+                    return { ...tx, timestamp: ts };
+                }
+                return tx;
+            });
+            
+            const requestWallet = latestWalletRef.current;
+            persistToCache(updatedTransactions, requestWallet, isAllTransactionsFetched, networkCursors);
+            return updatedTransactions;
+        });
+
+        return withTimestamps;
+    }, [persistToCache, isAllTransactionsFetched, networkCursors]);
 
     const changeSortDirection = useCallback((newDir: SortDirection) => {
         setSortDirection(newDir);
@@ -381,14 +500,20 @@ export function useTransactions() {
         fetchTransactions,
         fetchMore,
         clearCache,
+        fetchTimestampsForExport,
         // Pagination
         currentPage,
         pageSize,
         totalPages,
-        totalCount: transactions.length,
+        filteredTransactions,
+        totalCount: filteredTransactions.length,
         goToPage,
         changePageSize,
         pageSizeOptions: PAGE_SIZE_OPTIONS,
+        // Filtering
+        filters,
+        applyFilters,
+        clearFilters,
         // Sorting
         sortBy,
         sortDirection,

@@ -1,16 +1,18 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { Bell, RefreshCw, Filter, Search, Shield, MapPin, Clock, MoreVertical, ExternalLink, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUpDown, ArrowUp, ArrowDown, Loader2 } from "lucide-react"
+import { Bell, RefreshCw, Filter, Search, Shield, MapPin, Clock, MoreVertical, ExternalLink, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUpDown, ArrowUp, ArrowDown, Loader2, Copy, Check, Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import DashboardPageLayout from "@/components/dashboard/layout"
 import CreditCardIcon from "@/components/icons/credit-card"
-import { useTransactions } from "@/hooks/use-transactions"
+import { useTransactions, getRiskLevel } from "@/hooks/use-transactions"
 import type { PageSize, SortBy, SortDirection } from "@/hooks/use-transactions"
 import { NETWORKS } from "@/lib/config"
+import { FilterPanel } from "@/components/transactions/filter-panel"
+import { ExportDialog } from "@/components/transactions/export-dialog"
 
 // Helper function to format address
 const formatAddress = (address: string) => {
@@ -34,13 +36,6 @@ const riskStyles: Record<RiskLevel, string> = {
   medium: "bg-muted text-muted-foreground",
   low: "bg-green-500/20 text-green-500 border-green-500/40",
 }
-
-const getRiskLevel = (amount: string): RiskLevel => {
-  const numAmount = parseFloat(amount);
-  if (numAmount > 100) return "high";
-  if (numAmount > 50) return "medium";
-  return "low";
-};
 
 /**
  * Compute which page numbers to display in the pagination bar.
@@ -75,6 +70,31 @@ function getPageNumbers(currentPage: number, totalPages: number): number[] {
   return pages;
 }
 
+function CopyableCell({ value, displayValue }: { value: string; displayValue?: React.ReactNode }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="group relative flex items-center w-full h-full min-h-[1.5rem]">
+      <div className="pr-6">{displayValue ?? value}</div>
+      <button
+        onClick={handleCopy}
+        className="absolute right-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100 transition-opacity bg-background hover:bg-muted p-1 rounded-md z-10"
+        title="Copy"
+        aria-label="Copy"
+      >
+        {copied ? <Check className="size-3 text-green-500" /> : <Copy className="size-3 text-muted-foreground" />}
+      </button>
+    </div>
+  );
+}
+
 export default function TransactionsPage() {
   const {
     transactions,
@@ -96,6 +116,7 @@ export default function TransactionsPage() {
     sortDirection,
     changeSortBy,
     changeSortDirection,
+    fetchTimestampsForExport,
     fetchingTimestamps,
     sortByOptions,
     sortByLabels,
@@ -103,10 +124,17 @@ export default function TransactionsPage() {
     isAllTransactionsFetched,
     loadingMore,
     fetchMore,
+    // Filters
+    filters,
+    filteredTransactions,
+    applyFilters,
+    clearFilters,
   } = useTransactions();
 
   const [selectedTransaction, setSelectedTransaction] = useState<(typeof transactions)[number] | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isFilterOpen, setIsFilterOpen] = useState(false)
+  const [isExportOpen, setIsExportOpen] = useState(false)
   const selectedRiskLevel = selectedTransaction
     ? getRiskLevel(selectedTransaction.amountSC)
     : null
@@ -174,9 +202,25 @@ export default function TransactionsPage() {
             <p className="text-muted-foreground">Manage and monitor payment operations</p>
           </div>
           <div className="flex gap-3">
-            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
+            <Button 
+              className="bg-primary hover:bg-primary/90 text-primary-foreground relative"
+              onClick={() => setIsExportOpen(true)}
+            >
+              <Download className="size-4 mr-2" />
+              Export
+            </Button>
+            <Button 
+              className="bg-primary hover:bg-primary/90 text-primary-foreground relative"
+              onClick={() => setIsFilterOpen(true)}
+            >
               <Filter className="size-4 mr-2" />
               Filter
+              {Object.values(filters).some(v => v !== '') && (
+                <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500 border-2 border-background"></span>
+                </span>
+              )}
             </Button>
             {!hasFetched ? (
               <Button 
@@ -261,17 +305,18 @@ export default function TransactionsPage() {
         {/* Transaction Table */}
         <div className="bg-card border border-border/40 rounded-lg overflow-hidden flex-1 flex flex-col">
           <div className="p-6 border-b border-border/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <h2 className="text-xl font-serif">TRANSACTION ROSTER</h2>
+            <div className="flex items-center gap-4">
+              <h2 className="text-xl font-serif">TRANSACTION ROSTER</h2>
+              {/* Fetching timestamps indicator */}
+              {hasFetched && fetchingTimestamps && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" />
+                  <span>Fetching timestamps…</span>
+                </div>
+              )}
+            </div>
             {hasFetched && totalCount > 0 && (
               <div className="flex items-center gap-4 flex-wrap">
-                {/* Fetching timestamps indicator */}
-                {fetchingTimestamps && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="size-4 animate-spin" />
-                    <span>Fetching timestamps…</span>
-                  </div>
-                )}
-
                 {/* Sort By */}
                 <div className="flex items-center gap-2">
                   <ArrowUpDown className="size-4 text-muted-foreground" />
@@ -376,9 +421,15 @@ export default function TransactionsPage() {
                       onClick={() => handleRowClick(transaction)}
                       className="border-b border-border/40 hover:bg-accent/50 transition-colors cursor-pointer"
                     >
-                      <td className="px-6 py-4 font-mono whitespace-nowrap">{formatAddress(transaction.transactionHash)}</td>
-                      <td className="px-6 py-4 font-mono whitespace-nowrap">{formatAddress(transaction.buyer)}</td>
-                      <td className="px-6 py-4 font-mono whitespace-nowrap">{formatAddress(transaction.receiver)}</td>
+                      <td className="px-6 py-4 font-mono whitespace-nowrap">
+                        <CopyableCell value={transaction.transactionHash} displayValue={formatAddress(transaction.transactionHash)} />
+                      </td>
+                      <td className="px-6 py-4 font-mono whitespace-nowrap">
+                        <CopyableCell value={transaction.buyer} displayValue={formatAddress(transaction.buyer)} />
+                      </td>
+                      <td className="px-6 py-4 font-mono whitespace-nowrap">
+                        <CopyableCell value={transaction.receiver} displayValue={formatAddress(transaction.receiver)} />
+                      </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
                           <div className="size-2 rounded-full bg-green-500" />
@@ -386,30 +437,40 @@ export default function TransactionsPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        {sortBy === 'timestamp' ? (
-                          <div className="flex items-center gap-2 whitespace-nowrap">
-                            <Clock className="size-4 text-muted-foreground" />
-                            {transaction.timestamp
-                              ? transaction.timestamp.toLocaleString('en-US', {
-                                  month: 'short',
-                                  day: '2-digit',
-                                  year: 'numeric',
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                })
-                              : '—'}
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2 whitespace-nowrap">
-                            <MapPin className="size-4 text-muted-foreground" />
-                            #{transaction.blockNumber.toString()}
-                          </div>
-                        )}
+                        <CopyableCell 
+                          value={sortBy === 'timestamp' ? (transaction.timestamp?.toISOString() || "") : transaction.blockNumber.toString()}
+                          displayValue={
+                            sortBy === 'timestamp' ? (
+                              <div className="flex items-center gap-2 whitespace-nowrap">
+                                <Clock className="size-4 text-muted-foreground" />
+                                {transaction.timestamp
+                                  ? transaction.timestamp.toLocaleString('en-US', {
+                                      month: 'short',
+                                      day: '2-digit',
+                                      year: 'numeric',
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                    })
+                                  : '—'}
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 whitespace-nowrap">
+                                <MapPin className="size-4 text-muted-foreground" />
+                                #{transaction.blockNumber.toString()}
+                              </div>
+                            )
+                          }
+                        />
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-foreground">
                         {transaction.networkName || 'Unknown'}
                       </td>
-                      <td className="px-6 py-4 font-mono whitespace-nowrap">{sortBy === 'amountBC' ? `${transaction.amountBC} BC` : `${transaction.amountSC} SC`}</td>
+                      <td className="px-6 py-4 font-mono whitespace-nowrap">
+                        <CopyableCell 
+                          value={sortBy === 'amountBC' ? transaction.amountBC : transaction.amountSC}
+                          displayValue={sortBy === 'amountBC' ? `${transaction.amountBC} BC` : `${transaction.amountSC} SC`}
+                        />
+                      </td>
                       <td className="px-6 py-4">
                         <Badge
                           variant="secondary"
@@ -552,10 +613,20 @@ export default function TransactionsPage() {
         <DialogContent className="max-w-2xl bg-card border-border/40">
           <DialogHeader className="relative">
             <DialogTitle className="text-3xl font-display mb-2">{selectedTransaction ? formatAddress(selectedTransaction.buyer) : ''}</DialogTitle>
-            <p className="text-muted-foreground font-mono">{selectedTransaction?.transactionHash}</p>
+             <div className="flex items-center gap-2 text-muted-foreground font-mono">
+                <span className="break-all">{selectedTransaction?.transactionHash}</span>
+                {selectedTransaction && (
+                   <Button variant="ghost" size="icon" className="size-6 focus-visible:ring-1 focus-visible:ring-primary" aria-label="Copy transaction hash" onClick={(e) => {
+                      e.stopPropagation();
+                      navigator.clipboard.writeText(selectedTransaction.transactionHash);
+                   }}>
+                     <Copy className="size-3" />
+                   </Button>
+                )}
+             </div>
           </DialogHeader>
 
-          <div className="grid grid-cols-2 gap-8 py-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 py-6">
             <div className="space-y-6">
               <div>
                 <div className="text-sm text-muted-foreground mb-2">STATUS</div>
@@ -566,8 +637,22 @@ export default function TransactionsPage() {
               </div>
 
               <div>
-                <div className="text-sm text-muted-foreground mb-2">STABLECOIN AMOUNT</div>
+                <div className="text-sm text-muted-foreground mb-2">STABLECOIN (SC)</div>
                 <div className="text-2xl font-bold">{selectedTransaction?.amountSC} SC</div>
+              </div>
+
+              <div>
+                <div className="text-sm text-muted-foreground mb-2">BASECOIN (BC)</div>
+                <div className="text-2xl font-bold">{selectedTransaction?.amountBC} BC</div>
+              </div>
+              
+              <div>
+                <div className="text-sm text-muted-foreground mb-2">TIMESTAMP</div>
+                <div className="text-lg">
+                  {selectedTransaction?.timestamp 
+                    ? selectedTransaction.timestamp.toLocaleString()
+                    : 'N/A'}
+                </div>
               </div>
             </div>
 
@@ -575,6 +660,11 @@ export default function TransactionsPage() {
               <div>
                 <div className="text-sm text-muted-foreground mb-2">NETWORK</div>
                 <div className="text-lg">{selectedTransaction?.networkName}</div>
+              </div>
+
+              <div>
+                <div className="text-sm text-muted-foreground mb-2">BLOCK NUMBER</div>
+                <div className="text-lg">#{selectedTransaction?.blockNumber.toString()}</div>
               </div>
 
               <div>
@@ -586,23 +676,63 @@ export default function TransactionsPage() {
                   {selectedRiskLevel}
                 </Badge>
               </div>
+
+              <div>
+                <div className="text-sm text-muted-foreground mb-2">ADDRESSES</div>
+                <div className="space-y-2">
+                   <div className="flex flex-col gap-1">
+                     <span className="text-xs text-muted-foreground">Buyer</span>
+                     <div className="flex items-center gap-2">
+                       <span className="font-mono text-sm">{selectedTransaction ? formatAddress(selectedTransaction.buyer) : ''}</span>
+                       <Button variant="ghost" size="icon" className="size-5" aria-label="Copy buyer address" onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(selectedTransaction?.buyer || ''); }}>
+                         <Copy className="size-3" />
+                       </Button>
+                     </div>
+                   </div>
+                   <div className="flex flex-col gap-1">
+                     <span className="text-xs text-muted-foreground">Receiver</span>
+                     <div className="flex items-center gap-2">
+                       <span className="font-mono text-sm">{selectedTransaction ? formatAddress(selectedTransaction.receiver) : ''}</span>
+                       <Button variant="ghost" size="icon" className="size-5" aria-label="Copy receiver address" onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(selectedTransaction?.receiver || ''); }}>
+                         <Copy className="size-3" />
+                       </Button>
+                     </div>
+                   </div>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="flex gap-3 pt-4 border-t border-border/40">
+          <div className="flex gap-3 pt-4 border-t border-border/40 justify-end">
+            <Button variant="outline" className="border-border/40 bg-transparent" onClick={() => setIsModalOpen(false)}>
+              Close
+            </Button>
             <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" asChild>
                 <a href={selectedTransaction ? getExplorerUrl(selectedTransaction.chainId, selectedTransaction.transactionHash) : '#'} target="_blank" rel="noreferrer">
                     View on Explorer
                 </a>
             </Button>
-            <Button variant="outline" className="border-border/40 bg-transparent" onClick={() => {
-                if (selectedTransaction) navigator.clipboard.writeText(selectedTransaction.buyer);
-            }}>
-              Copy Buyer Address
-            </Button>
           </div>
         </DialogContent>
       </Dialog>
+      
+      <FilterPanel 
+        open={isFilterOpen}
+        onOpenChange={setIsFilterOpen}
+        filters={filters}
+        onApplyFilters={applyFilters}
+        onClearFilters={clearFilters}
+      />
+      <ExportDialog
+        open={isExportOpen}
+        onOpenChange={setIsExportOpen}
+        transactions={transactions}
+        filteredTransactions={filteredTransactions}
+        fetchTimestampsForExport={fetchTimestampsForExport}
+        hasActiveFilters={Object.values(filters).some(v => v !== '')}
+        sortBy={sortBy}
+        sortDirection={sortDirection}
+      />
       </div>
     </DashboardPageLayout>
   )
