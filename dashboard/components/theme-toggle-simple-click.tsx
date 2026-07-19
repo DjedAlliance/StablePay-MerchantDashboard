@@ -15,16 +15,12 @@ export function ThemeToggleSimpleClick() {
   }, [])
 
   const cycleTheme = () => {
-    console.log('Current theme:', theme)
     if (theme === "light") {
       setTheme("dark")
-      console.log('Switching to dark')
     } else if (theme === "dark") {
       setTheme("system")
-      console.log('Switching to system')
     } else {
       setTheme("light")
-      console.log('Switching to light')
     }
   }
 

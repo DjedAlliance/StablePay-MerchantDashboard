@@ -1,5 +1,6 @@
 import type React from "react"
 import { Roboto_Mono } from "next/font/google"
+import { GeistSans } from "geist/font/sans"
 import "./globals.css"
 import type { Metadata } from "next"
 import localFont from "next/font/local"
@@ -7,6 +8,7 @@ import { SidebarProvider } from "@/components/ui/sidebar"
 import { MobileHeader } from "@/components/dashboard/mobile-header"
 import { DashboardSidebar } from "@/components/dashboard/sidebar"
 import { Providers } from "@/providers"
+import { FONT_SCALE_SCRIPT } from "@/hooks/use-font-scale"
 
 const robotoMono = Roboto_Mono({
   variable: "--font-roboto-mono",
@@ -70,8 +72,9 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="preload" href="/fonts/Rebels-Fett.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+        <script dangerouslySetInnerHTML={{ __html: FONT_SCALE_SCRIPT }} />
       </head>
-      <body className={`${rebelGrotesk.variable} ${robotoMono.variable} antialiased`}>
+      <body className={`${rebelGrotesk.variable} ${robotoMono.variable} ${GeistSans.variable} antialiased`}>
         <Providers>
           <SidebarProvider>
             <MobileHeader />

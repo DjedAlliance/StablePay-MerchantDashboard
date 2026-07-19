@@ -14,7 +14,7 @@ const DEFAULT_PERMISSIONS: ThemePermissions = {
   allowLightMode: true,
   allowDarkMode: true,
   allowSystemMode: true,
-  defaultTheme: "dark",
+  defaultTheme: "system",
   lockTheme: false,
 }
 

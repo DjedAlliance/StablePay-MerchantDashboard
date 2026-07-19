@@ -1,5 +1,6 @@
 import type React from "react"
 import NumberFlow from "@number-flow/react"
+import { ArrowUpRight, ArrowDownRight } from "lucide-react"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Bullet } from "@/components/ui/bullet"
@@ -41,96 +42,60 @@ export default function DashboardStat({ label, value, description, icon, tag, in
     }
   }
 
-  const getIntentClassName = () => {
-    if (intent === "positive") return "text-success"
-    if (intent === "negative") return "text-destructive"
-    return "text-muted-foreground"
-  }
-
   const { prefix, numericValue, suffix, isNumeric } = parseValue(value)
 
+  // `intent` is optional, so anything other than positive/negative falls back
+  // to the neutral styling rather than rendering an uncolored pill.
+  const trendPillClassName =
+    intent === "positive"
+      ? "bg-success/10 text-success"
+      : intent === "negative"
+        ? "bg-destructive/10 text-destructive"
+        : "bg-muted text-muted-foreground"
+
   return (
-    <Card className="relative overflow-hidden min-h-[200px] shadow-card hover:shadow-elevated transition-shadow duration-300 dark:shadow-border">
+    <Card className="group relative overflow-hidden shadow-card hover:shadow-elevated transition-shadow duration-300">
       <CardHeader className="flex items-center justify-between pb-4">
-        <CardTitle className="flex items-center gap-2.5 text-base whitespace-nowrap">
+        <CardTitle className="flex items-center gap-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground whitespace-nowrap">
           <Bullet />
           {label}
         </CardTitle>
         <Icon className="size-5 text-muted-foreground" />
       </CardHeader>
 
-      <CardContent className="bg-accent flex-1 pt-4 md:pt-8 pb-6 overflow-clip relative">
-        <div className="flex items-center">
-          <span className="text-5xl md:text-6xl font-display">
+      <CardContent className="bg-card flex-1 pt-5 md:pt-6 pb-6 overflow-clip relative">
+        <div className="flex items-end gap-3">
+          <span className="text-4xl md:text-5xl font-bold tracking-tight tabular-nums leading-none">
             {isNumeric ? <NumberFlow value={numericValue} prefix={prefix} suffix={suffix} /> : value}
           </span>
           {tag && (
-            <Badge variant="default" className="uppercase ml-3">
+            <Badge variant="default" className="uppercase mb-1">
               {tag}
             </Badge>
+          )}
+          {direction && (
+            <span
+              className={cn(
+                "mb-1.5 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs font-medium",
+                trendPillClassName,
+              )}
+            >
+              {direction === "up" ? (
+                <ArrowUpRight className="size-3.5" aria-hidden="true" />
+              ) : (
+                <ArrowDownRight className="size-3.5" aria-hidden="true" />
+              )}
+              <span className="sr-only">
+                {direction === "up" ? "Trending up" : "Trending down"}
+              </span>
+            </span>
           )}
         </div>
 
         {description && (
-          <div className="justify-between mt-2">
-            <p className="text-sm md:text-base font-medium text-muted-foreground tracking-wide">{description}</p>
-          </div>
-        )}
-
-        {/* Marquee Animation */}
-        {direction && (
-          <div className="absolute top-0 right-0 w-14 h-full pointer-events-none overflow-hidden group">
-            <div
-              className={cn(
-                "flex flex-col transition-all duration-500",
-                "group-hover:scale-105 group-hover:brightness-110",
-                getIntentClassName(),
-                direction === "up" ? "animate-marquee-up" : "animate-marquee-down",
-              )}
-            >
-              <div className={cn("flex", direction === "up" ? "flex-col-reverse" : "flex-col")}>
-                {Array.from({ length: 6 }, (_, i) => (
-                  <Arrow key={i} direction={direction} index={i} />
-                ))}
-              </div>
-              <div className={cn("flex", direction === "up" ? "flex-col-reverse" : "flex-col")}>
-                {Array.from({ length: 6 }, (_, i) => (
-                  <Arrow key={i} direction={direction} index={i} />
-                ))}
-              </div>
-            </div>
-          </div>
+          <p className="mt-2.5 text-sm font-medium text-muted-foreground tracking-wide">{description}</p>
         )}
       </CardContent>
     </Card>
-  )
-}
-
-interface ArrowProps {
-  direction: "up" | "down"
-  index: number
-}
-
-const Arrow = ({ direction, index }: ArrowProps) => {
-  const staggerDelay = index * 0.15 // Faster stagger
-  const phaseDelay = (index % 3) * 0.8 // Different phase groups
-
-  return (
-    <span
-      style={{
-        animationDelay: `${staggerDelay + phaseDelay}s`,
-        animationDuration: "3s",
-        animationTimingFunction: "cubic-bezier(0.4, 0.0, 0.2, 1)",
-      }}
-      className={cn(
-        "text-center text-5xl size-14 font-display leading-none block",
-        "transition-all duration-700 ease-out",
-        "animate-marquee-pulse",
-
-        "will-change-transform",
-      )}
-    >
-      {direction === "up" ? "↑" : "↓"}
-    </span>
   )
 }

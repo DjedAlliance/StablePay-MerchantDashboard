@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { WagmiProvider } from "wagmi"
 import { config } from "@/lib/wagmi-config"
 import { ThemeProvider } from "@/components/theme-provider"
+import { FontScaleProvider } from "@/hooks/use-font-scale"
 
 const queryClient = new QueryClient()
 
@@ -13,11 +14,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <QueryClientProvider client={queryClient}>
         <ThemeProvider
           attribute="class"
-          defaultTheme="dark"
+          defaultTheme="system"
           enableSystem
           disableTransitionOnChange
         >
-          {children}
+          <FontScaleProvider>{children}</FontScaleProvider>
         </ThemeProvider>
       </QueryClientProvider>
     </WagmiProvider>

@@ -16,20 +16,27 @@ export default function DashboardPageLayout({
 }: DashboardPageLayoutProps) {
   return (
     <div className="flex flex-col relative w-full gap-1 min-h-full">
-      <div className="flex items-center lg:items-baseline gap-2.5 md:gap-4 px-4 md:px-6 py-3 md:pb-4 lg:pt-7 ring-2 ring-pop sticky top-header-mobile lg:top-0 bg-background z-10 shadow-navbar">
-        <div className="max-lg:contents rounded bg-primary size-7 md:size-9 flex items-center justify-center my-auto shadow-card">
-          <header.icon className="ml-1 lg:ml-0 opacity-50 md:opacity-100 size-5 text-primary-foreground" />
+      <div className="flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3.5 md:py-5 border border-border/60 rounded-xl sticky top-header-mobile lg:top-0 bg-background/95 backdrop-blur-sm z-10 shadow-navbar">
+        <div className="shrink-0 rounded-lg bg-primary size-8 md:size-10 flex items-center justify-center shadow-button">
+          <header.icon className="size-5 text-primary-foreground" />
         </div>
-        <h1 className="text-xl lg:text-4xl font-serif leading-[1] mb-1">
-          {header.title}
-        </h1>
+        <div className="flex flex-col min-w-0">
+          <h1 className="text-lg md:text-2xl lg:text-3xl font-semibold tracking-tight leading-tight truncate">
+            {header.title}
+          </h1>
+          {header.description && (
+            <span className="text-xs md:text-sm text-muted-foreground truncate lg:hidden">
+              {header.description}
+            </span>
+          )}
+        </div>
         {header.description && (
-          <span className="ml-auto text-xs md:text-sm text-muted-foreground block">
+          <span className="ml-auto hidden lg:block text-sm text-muted-foreground text-right">
             {header.description}
           </span>
         )}
       </div>
-      <div className="min-h-full flex-1 flex flex-col gap-8 md:gap-14 px-3 lg:px-6 py-6 md:py-10 ring-2 ring-pop bg-background shadow-panel dark:shadow-border">
+      <div className="min-h-full flex-1 flex flex-col gap-8 md:gap-12 px-3 md:px-6 py-6 md:py-9 border border-border/60 rounded-xl bg-background shadow-panel">
         {children}
       </div>
     </div>

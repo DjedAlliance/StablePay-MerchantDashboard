@@ -11,6 +11,7 @@ import LockIcon from "@/components/icons/lock"
 import CreditCardIcon from "@/components/icons/credit-card"
 import { usePathname } from "next/navigation"
 import { ThemeToggleSimpleClick } from "@/components/theme-toggle-simple-click"
+import { TextSizeControl } from "@/components/text-size-control"
 
 import {
   Sidebar,
@@ -134,21 +135,26 @@ export function DashboardSidebar({ className, ...props }: React.ComponentProps<t
 
   return (
     <Sidebar {...props} className={cn("py-sides", className)}>
-      <SidebarHeader className="rounded-t-lg flex gap-3 flex-row rounded-b-none">
-        <div className="flex overflow-clip size-24 shrink-0 items-center justify-center">
-          <Image
-            src="/StablePay.svg"
-            alt="StablePay Logo"
-            width={80}
-            height={80}
-            className="w-16 h-16 object-contain"
-          />
+      <SidebarHeader className="rounded-t-lg rounded-b-none gap-2">
+        <div className="flex items-center gap-2.5">
+          <div className="flex shrink-0 items-center justify-center">
+            <Image
+              src="/StablePay.svg"
+              alt="StablePay Logo"
+              width={40}
+              height={40}
+              className="w-10 h-10 object-contain"
+            />
+          </div>
+          <div className="grid flex-1 text-left leading-tight min-w-0">
+            <span className="text-xl font-display tracking-tight truncate">StablePay</span>
+            <span className="text-[0.65rem] uppercase tracking-wide text-muted-foreground truncate">
+              Merchant Payments
+            </span>
+          </div>
         </div>
-        <div className="grid flex-1 text-left text-sm leading-tight">
-          <span className="text-2xl font-serif font-bold">StablePay</span>
-          <span className="text-xs uppercase">Merchant Dashboard for Payment Management</span>
-        </div>
-        <div className="flex items-start pt-1">
+        <div className="flex items-center justify-end gap-0.5 border-t border-sidebar-border/60 pt-1.5">
+          <TextSizeControl />
           <ThemeToggleSimpleClick />
         </div>
       </SidebarHeader>
@@ -220,11 +226,11 @@ export function DashboardSidebar({ className, ...props }: React.ComponentProps<t
                         <CreditCardIcon className="size-8" />
                       </div>
                       <div className="group/item pl-3 pr-1.5 pt-2 pb-1.5 flex-1 flex bg-sidebar-accent hover:bg-sidebar-accent-active/75 items-center rounded group-data-[state=open]:bg-sidebar-accent-active group-data-[state=open]:hover:bg-sidebar-accent-active group-data-[state=open]:text-sidebar-accent-foreground">
-                        <div className="grid flex-1 text-left text-sm leading-tight">
-                          <span className="truncate text-xl font-display">
+                        <div className="grid flex-1 text-left leading-tight min-w-0">
+                          <span className="truncate text-base font-mono font-medium">
                             {`${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`}
                           </span>
-                          <span className="truncate text-xs uppercase opacity-50 group-hover/item:opacity-100 font-mono">
+                          <span className="truncate text-[0.65rem] uppercase tracking-wide opacity-60 group-hover/item:opacity-100">
                             Connected
                           </span>
                         </div>
@@ -252,9 +258,9 @@ export function DashboardSidebar({ className, ...props }: React.ComponentProps<t
                       <CreditCardIcon className="size-8" />
                     </div>
                     <div className="group/item pl-3 pr-1.5 pt-2 pb-1.5 flex-1 flex bg-sidebar-accent hover:bg-sidebar-accent-active/75 items-center rounded">
-                      <div className="grid flex-1 text-left text-sm leading-tight">
-                        <span className="truncate text-xl font-display">Connect Wallet</span>
-                        <span className="truncate text-xs uppercase opacity-50 group-hover/item:opacity-100 font-mono">
+                      <div className="grid flex-1 text-left leading-tight min-w-0">
+                        <span className="truncate text-base font-semibold">Connect Wallet</span>
+                        <span className="truncate text-[0.65rem] uppercase tracking-wide opacity-60 group-hover/item:opacity-100">
                           Not Connected
                         </span>
                       </div>
@@ -269,11 +275,11 @@ export function DashboardSidebar({ className, ...props }: React.ComponentProps<t
                       <CreditCardIcon className="size-8" />
                     </div>
                     <div className="group/item pl-3 pr-1.5 pt-2 pb-1.5 flex-1 flex bg-sidebar-accent hover:bg-sidebar-accent-active/75 items-center rounded">
-                      <div className="grid flex-1 text-left text-sm leading-tight">
-                        <span className="truncate text-xl font-display">
+                      <div className="grid flex-1 text-left leading-tight min-w-0">
+                        <span className="truncate text-base font-mono font-medium">
                           {`${addr.slice(0, 6)}...${addr.slice(-4)}`}
                         </span>
-                        <span className="truncate text-xs uppercase opacity-50 group-hover/item:opacity-100 font-mono">
+                        <span className="truncate text-[0.65rem] uppercase tracking-wide opacity-60 group-hover/item:opacity-100">
                           Added
                         </span>
                       </div>

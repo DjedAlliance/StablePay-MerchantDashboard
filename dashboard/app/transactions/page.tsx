@@ -198,8 +198,8 @@ export default function TransactionsPage() {
         {/* Title Section */}
         <div className="flex flex-col md:flex-row items-start justify-between mb-8 gap-4 md:gap-0">
           <div>
-            <h1 className="text-4xl font-serif mb-2">Transaction Network</h1>
-            <p className="text-muted-foreground">Manage and monitor payment operations</p>
+            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight mb-1.5">Transaction Network</h1>
+            <p className="text-sm text-muted-foreground">Manage and monitor payment operations</p>
           </div>
           <div className="flex gap-3">
             <Button 
@@ -256,7 +256,7 @@ export default function TransactionsPage() {
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           {/* Search Card */}
-          <div className="bg-card border border-border/40 rounded-lg p-6">
+          <div className="bg-card border border-border/60 rounded-xl p-5 shadow-card">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input placeholder="Search transactions" className="pl-10 bg-background/50 border-border/40" />
@@ -264,49 +264,49 @@ export default function TransactionsPage() {
           </div>
 
           {/* Active Transactions */}
-          <div className="bg-card border border-border/40 rounded-lg p-6">
+          <div className="bg-card border border-border/60 rounded-xl p-5 shadow-card">
             <div className="flex items-start justify-between">
               <div>
                 <div className="text-sm text-muted-foreground mb-2">TOTAL TRANSACTIONS</div>
-                <div className="text-4xl font-bold">
+                <div className="text-3xl font-bold tabular-nums tracking-tight">
                   {loading && transactionStats.total === 0 ? "..." : (!isAllTransactionsFetched && transactionStats.total !== 0 ? `${transactionStats.total}+` : transactionStats.total)}
                 </div>
                 {!isAllTransactionsFetched && transactionStats.total >= 1000 && !loading && (
                   <div className="text-xs text-muted-foreground mt-1 text-primary font-medium">1k+ limit reached</div>
                 )}
               </div>
-              <Shield className="size-8 text-foreground" />
+              <Shield className="size-7 text-primary" />
             </div>
           </div>
 
           {/* Failed */}
-          <div className="bg-card border border-border/40 rounded-lg p-6">
+          <div className="bg-card border border-border/60 rounded-xl p-5 shadow-card">
             <div className="flex items-start justify-between">
               <div>
                 <div className="text-sm text-muted-foreground mb-2">FAILED</div>
-                <div className="text-4xl font-bold text-red-500">0</div>
+                <div className="text-3xl font-bold tabular-nums tracking-tight text-destructive">0</div>
               </div>
-              <Shield className="size-8 text-red-500" />
+              <Shield className="size-7 text-destructive" />
             </div>
           </div>
 
           {/* Pending */}
-          <div className="bg-card border border-border/40 rounded-lg p-6">
+          <div className="bg-card border border-border/60 rounded-xl p-5 shadow-card">
             <div className="flex items-start justify-between">
               <div>
                 <div className="text-sm text-muted-foreground mb-2">PENDING</div>
-                <div className="text-4xl font-bold text-primary">0</div>
+                <div className="text-3xl font-bold tabular-nums tracking-tight text-warning">0</div>
               </div>
-              <Shield className="size-8 text-primary" />
+              <Shield className="size-7 text-warning" />
             </div>
           </div>
         </div>
 
         {/* Transaction Table */}
-        <div className="bg-card border border-border/40 rounded-lg overflow-hidden flex-1 flex flex-col">
+        <div className="bg-card border border-border/60 rounded-xl overflow-hidden flex-1 flex flex-col shadow-card">
           <div className="p-6 border-b border-border/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <h2 className="text-xl font-serif">TRANSACTION ROSTER</h2>
+              <h2 className="text-base font-semibold uppercase tracking-wide">Transaction Roster</h2>
               {/* Fetching timestamps indicator */}
               {hasFetched && fetchingTimestamps && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -612,7 +612,7 @@ export default function TransactionsPage() {
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="max-w-2xl bg-card border-border/40">
           <DialogHeader className="relative">
-            <DialogTitle className="text-3xl font-display mb-2">{selectedTransaction ? formatAddress(selectedTransaction.buyer) : ''}</DialogTitle>
+            <DialogTitle className="text-2xl font-mono font-semibold mb-2">{selectedTransaction ? formatAddress(selectedTransaction.buyer) : ''}</DialogTitle>
              <div className="flex items-center gap-2 text-muted-foreground font-mono">
                 <span className="break-all">{selectedTransaction?.transactionHash}</span>
                 {selectedTransaction && (

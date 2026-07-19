@@ -44,9 +44,12 @@ export function FilterPanel({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-[400px] sm:w-[540px] pl-4 overflow-y-auto">
-        <SheetHeader className="pb-4 border-b border-border/40">
-          <SheetTitle className="text-2xl font-serif">Filter Transactions</SheetTitle>
+      <SheetContent
+        side="right"
+        className="w-full max-w-[440px] sm:max-w-[520px] px-5 sm:px-6 gap-0 overflow-x-hidden overflow-y-auto"
+      >
+        <SheetHeader className="px-0 pt-1 pb-4 border-b border-border/40">
+          <SheetTitle className="text-2xl font-semibold tracking-tight pr-8">Filter Transactions</SheetTitle>
           <SheetDescription>
             Refine your transaction roster by applying multiple filters.
           </SheetDescription>
@@ -218,7 +221,7 @@ export function FilterPanel({
           </div>
         </div>
 
-        <SheetFooter className="flex-row justify-between gap-3 pt-4 border-t border-border/40 sm:justify-between pb-8">
+        <SheetFooter className="flex-row flex-wrap justify-between gap-3 px-0 pt-4 pb-6 border-t border-border/40 sm:justify-between">
           <Button variant="outline" onClick={handleClear} className="w-full sm:w-auto">
             <RotateCcw className="size-4 mr-2" />
             Clear
