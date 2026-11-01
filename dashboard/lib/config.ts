@@ -2,6 +2,7 @@
 export interface NetworkConfig {
     name: string;
     rpcUrl: string;
+    fallbackRpcUrls?: string[];
     chainId: number;
     explorerUrl?: string;
 }
@@ -23,7 +24,8 @@ export const NETWORKS: Record<string, NetworkConfig> = {
     },
     sepolia: {
         name: "Ethereum Sepolia",
-        rpcUrl: "https://ethereum-sepolia.publicnode.com",
+        rpcUrl: "https://sepolia.gateway.tenderly.co",
+        fallbackRpcUrls: ["https://ethereum-sepolia.publicnode.com"],
         chainId: 11155111,
         explorerUrl: "https://sepolia.etherscan.io"
     },
@@ -69,6 +71,11 @@ export const CONTRACTS: Record<string, ContractConfig> = {
         address: "0xD4548F4b6d08852B56cdabC6be7Fd90953179d68",
         name: "StablePay",
         network: "mordor"
+    },
+    "tectonic-sepolia": {
+        address: "0xea262fB18992ddE398a5b6fa7A4F879FfB262aC1",
+        name: "Tectonic",
+        network: "sepolia"
     }
 };
 
@@ -76,8 +83,58 @@ export const CONTRACTS: Record<string, ContractConfig> = {
 export const DEPLOYMENT_BLOCKS: Record<string, bigint> = {
     sepolia: BigInt(6000000),
     "ethereum-classic": BigInt(20410397),
-    mordor: BigInt(11501796)
+    mordor: BigInt(11501796),
+    "tectonic-sepolia": BigInt(12027502)
 };
+
+export type Protocol = "djed" | "tectonic";
+
+export interface ProtocolDeployment {
+    key: string;
+    networkKey: string;
+    contractKey: string;
+}
+
+export interface ProtocolConfig {
+    id: Protocol;
+    name: string;
+    scDecimals: number;
+    bcDecimals: number;
+    deployments: ProtocolDeployment[];
+}
+
+export const PROTOCOLS: Record<Protocol, ProtocolConfig> = {
+    djed: {
+        id: "djed",
+        name: "Djed",
+        scDecimals: 6,
+        bcDecimals: 18,
+        deployments: [
+            { key: "sepolia", networkKey: "sepolia", contractKey: "stablepay" },
+            { key: "ethereum-classic", networkKey: "ethereum-classic", contractKey: "stablepay-etc" },
+            { key: "mordor", networkKey: "mordor", contractKey: "stablepay-mordor" }
+        ]
+    },
+    tectonic: {
+        id: "tectonic",
+        name: "Tectonic",
+        scDecimals: 18,
+        bcDecimals: 18,
+        deployments: [
+            { key: "tectonic-sepolia", networkKey: "sepolia", contractKey: "tectonic-sepolia" }
+        ]
+    }
+};
+
+export const DEFAULT_PROTOCOL: Protocol = "djed";
+
+export function isProtocol(value: unknown): value is Protocol {
+    return typeof value === "string" && Object.prototype.hasOwnProperty.call(PROTOCOLS, value);
+}
+
+export function getProtocolNetworkNames(protocol: Protocol): string[] {
+    return Array.from(new Set(PROTOCOLS[protocol].deployments.map(d => NETWORKS[d.networkKey].name)));
+}
 
 // Get current network configuration
 export function getCurrentNetwork(): NetworkConfig {

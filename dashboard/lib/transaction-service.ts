@@ -1,7 +1,8 @@
-import { createPublicClient, http, formatUnits, defineChain, type PublicClient } from 'viem';
+import { createPublicClient, http, fallback, formatUnits, defineChain, type PublicClient } from 'viem';
 import { sepolia } from 'viem/chains';
 
-import { NETWORKS, CONTRACTS, DEPLOYMENT_BLOCKS } from './config';
+import { NETWORKS, CONTRACTS, DEPLOYMENT_BLOCKS, PROTOCOLS, DEFAULT_PROTOCOL } from './config';
+import type { NetworkConfig, Protocol, ProtocolConfig, ProtocolDeployment } from './config';
 import { parseAbiItem } from 'viem';
 
 export interface TransactionEvent {
@@ -65,6 +66,16 @@ const STABLEPAY_EVENT = parseAbiItem(
     'event BoughtStableCoins(address indexed buyer, address indexed receiver, uint256 amountSC, uint256 amountBC)'
 );
 
+const TECTONIC_MINTED_EVENT = parseAbiItem(
+    'event Minted(address indexed minter, address indexed receiver, uint256 amountSC, uint256 amountBC)'
+);
+
+const createTransport = (network: NetworkConfig) => {
+    const fallbackUrls = network.fallbackRpcUrls ?? [];
+    if (fallbackUrls.length === 0) return http(network.rpcUrl);
+    return fallback([network.rpcUrl, ...fallbackUrls].map(url => http(url)));
+};
+
 export class TransactionService {
     private sepoliaClient: PublicClient;
     private etcClient: PublicClient;
@@ -73,15 +84,15 @@ export class TransactionService {
     constructor() {
         this.sepoliaClient = createPublicClient({
             chain: sepolia,
-            transport: http(NETWORKS.sepolia.rpcUrl),
+            transport: createTransport(NETWORKS.sepolia),
         });
         this.etcClient = createPublicClient({
             chain: etcMainnet,
-            transport: http(NETWORKS['ethereum-classic'].rpcUrl),
+            transport: createTransport(NETWORKS['ethereum-classic']),
         });
         this.mordorClient = createPublicClient({
             chain: mordor,
-            transport: http(NETWORKS.mordor.rpcUrl),
+            transport: createTransport(NETWORKS.mordor),
         });
     }
 
@@ -91,7 +102,7 @@ export class TransactionService {
     };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    private mapRawEvent(event: any, network: { chainId: number; name: string }): TransactionEvent {
+    private mapRawEvent(event: any, network: { chainId: number; name: string }, protocolConfig: ProtocolConfig): TransactionEvent {
         const rawData = event.data.slice(2);
         const amountSCHex = '0x' + rawData.slice(0, 64);
         const amountBCHex = '0x' + rawData.slice(64);
@@ -99,8 +110,8 @@ export class TransactionService {
         return {
             buyer: this.formatAddress(event.topics[1]),
             receiver: this.formatAddress(event.topics[2]),
-            amountSC: formatUnits(BigInt(amountSCHex), 6),
-            amountBC: formatUnits(BigInt(amountBCHex), 18),
+            amountSC: formatUnits(BigInt(amountSCHex), protocolConfig.scDecimals),
+            amountBC: formatUnits(BigInt(amountBCHex), protocolConfig.bcDecimals),
             blockNumber: event.blockNumber,
             transactionHash: event.transactionHash,
             chainId: network.chainId,
@@ -117,41 +128,73 @@ export class TransactionService {
         }
     }
 
-    private async fetchEventsFromNetwork(
+    private resolveDeployment(deployment: ProtocolDeployment): {
+        client: PublicClient | null;
+        contractAddress: string;
+        network: NetworkConfig;
+        deploymentBlock: bigint;
+    } {
+        const network = NETWORKS[deployment.networkKey];
+        return {
+            client: this.getClientByChainId(network.chainId),
+            contractAddress: CONTRACTS[deployment.contractKey].address,
+            network,
+            deploymentBlock: DEPLOYMENT_BLOCKS[deployment.key] || BigInt(0),
+        };
+    }
+
+    private getProtocolLogs(
         client: PublicClient,
+        protocol: Protocol,
         contractAddress: string,
-        networkKey: string,
+        merchantAddresses: string[] | undefined,
+        fromBlock: bigint,
+        toBlock: bigint
+    ) {
+        const address = contractAddress as `0x${string}`;
+        const args = merchantAddresses && merchantAddresses.length > 0
+            ? { receiver: merchantAddresses as `0x${string}`[] }
+            : undefined;
+
+        if (protocol === 'tectonic') {
+            return client.getLogs({ address, event: TECTONIC_MINTED_EVENT, args, fromBlock, toBlock });
+        }
+        return client.getLogs({ address, event: STABLEPAY_EVENT, args, fromBlock, toBlock });
+    }
+
+    private async fetchEventsFromNetwork(
+        protocol: Protocol,
+        deployment: ProtocolDeployment,
         merchantAddresses?: string[]
     ): Promise<TransactionEvent[]> {
         try {
+            const { client, contractAddress, network, deploymentBlock } = this.resolveDeployment(deployment);
+            if (!client) return [];
             const currentBlock = await client.getBlockNumber();
-            const startBlock = DEPLOYMENT_BLOCKS[networkKey] || BigInt(0);
             const maxBlockRange = BigInt(49999);
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             let allEvents: any[] = [];
 
-            let fromBlock = startBlock;
+            let fromBlock = deploymentBlock;
             while (fromBlock <= currentBlock) {
                 const toBlock = fromBlock + maxBlockRange > currentBlock ? currentBlock : fromBlock + maxBlockRange;
 
-                const purchaseEvents = await client.getLogs({
-                    address: contractAddress as `0x${string}`,
-                    event: STABLEPAY_EVENT,
-                    args: merchantAddresses && merchantAddresses.length > 0
-                        ? { receiver: merchantAddresses as `0x${string}`[] }
-                        : undefined,
+                const purchaseEvents = await this.getProtocolLogs(
+                    client,
+                    protocol,
+                    contractAddress,
+                    merchantAddresses,
                     fromBlock,
                     toBlock
-                });
+                );
                 allEvents = [...allEvents, ...purchaseEvents];
                 
                 fromBlock = toBlock + BigInt(1);
             }
 
-            const network = NETWORKS[networkKey];
-            return allEvents.map(event => this.mapRawEvent(event, network));
+            return allEvents.map(event => this.mapRawEvent(event, network, PROTOCOLS[protocol]));
         } catch (err) {
-            console.error(`Error fetching events from ${networkKey}:`, err);
+            console.error(`Error fetching ${protocol} events from ${deployment.key}:`, err);
             return [];
         }
     }
@@ -165,9 +208,8 @@ export class TransactionService {
      *   (exclusive upper bound for resume). Used by "Fetch More".
      */
     private async fetchEventsFromNetworkReverse(
-        client: PublicClient,
-        contractAddress: string,
-        networkKey: string,
+        protocol: Protocol,
+        deployment: ProtocolDeployment,
         merchantAddresses: string[] | undefined,
         onChunk: (events: TransactionEvent[]) => void,
         options?: {
@@ -175,10 +217,15 @@ export class TransactionService {
             resumeFromBlock?: bigint;
         }
     ): Promise<NetworkCursorResult> {
-        const deploymentBlock = DEPLOYMENT_BLOCKS[networkKey] || BigInt(0);
+        const { client, contractAddress, network, deploymentBlock } = this.resolveDeployment(deployment);
+        const protocolConfig = PROTOCOLS[protocol];
         const maxBlockRange = BigInt(49999);
-        const network = NETWORKS[networkKey];
         let toBlock = BigInt(0);
+
+        if (!client) {
+            console.error(`No RPC client configured for ${deployment.networkKey}`);
+            return { cursor: '0', hasMore: false };
+        }
 
         try {
             toBlock = options?.resumeFromBlock ?? await client.getBlockNumber();
@@ -192,20 +239,19 @@ export class TransactionService {
                     ? deploymentBlock
                     : toBlock - maxBlockRange;
 
-                const purchaseEvents = await client.getLogs({
-                    address: contractAddress as `0x${string}`,
-                    event: STABLEPAY_EVENT,
-                    args: merchantAddresses && merchantAddresses.length > 0
-                        ? { receiver: merchantAddresses as `0x${string}`[] }
-                        : undefined,
+                const purchaseEvents = await this.getProtocolLogs(
+                    client,
+                    protocol,
+                    contractAddress,
+                    merchantAddresses,
                     fromBlock,
-                    toBlock,
-                });
+                    toBlock
+                );
 
                 if (purchaseEvents.length > 0) {
                     // Logs from getLogs are ascending (oldest first). For "newest first", we reverse them.
                     const events = purchaseEvents
-                        .map(event => this.mapRawEvent(event, network))
+                        .map(event => this.mapRawEvent(event, network, protocolConfig))
                         .reverse();
                     onChunk(events);
                 }
@@ -224,7 +270,7 @@ export class TransactionService {
             if (options?.signal?.aborted) {
                 return { cursor: toBlock.toString(), hasMore: true };
             }
-            console.error(`Error fetching events from ${networkKey}:`, err);
+            console.error(`Error fetching ${protocol} events from ${deployment.key}:`, err);
             return { cursor: toBlock.toString(), hasMore: true };
         }
     }
@@ -287,31 +333,18 @@ export class TransactionService {
         });
     }
 
-    async fetchStableCoinPurchases(merchantAddresses?: string[]): Promise<TransactionEvent[]> {
+    async fetchStableCoinPurchases(merchantAddresses?: string[], protocol: Protocol = DEFAULT_PROTOCOL): Promise<TransactionEvent[]> {
         try {
-            const [sepoliaEvents, etcEvents, mordorEvents] = await Promise.all([
-                this.fetchEventsFromNetwork(
-                    this.sepoliaClient,
-                    CONTRACTS.stablepay.address,
-                    'sepolia',
-                    merchantAddresses
-                ),
-                this.fetchEventsFromNetwork(
-                    this.etcClient,
-                    CONTRACTS['stablepay-etc'].address,
-                    'ethereum-classic',
-                    merchantAddresses
-                ),
-                this.fetchEventsFromNetwork(
-                    this.mordorClient,
-                    CONTRACTS['stablepay-mordor'].address,
-                    'mordor',
-                    merchantAddresses
-                )
-            ]);
+            const deployments = PROTOCOLS[protocol].deployments;
+            const eventsPerDeployment = await Promise.all(
+                deployments.map(deployment => this.fetchEventsFromNetwork(protocol, deployment, merchantAddresses))
+            );
 
-            const allEvents = [...sepoliaEvents, ...etcEvents, ...mordorEvents];
-            console.log(`Total events found: ${allEvents.length} (Sepolia: ${sepoliaEvents.length}, ETC: ${etcEvents.length}, Mordor: ${mordorEvents.length})`);
+            const allEvents = eventsPerDeployment.flat();
+            const breakdown = deployments
+                .map((deployment, i) => `${deployment.key}: ${eventsPerDeployment[i].length}`)
+                .join(', ');
+            console.log(`Total ${protocol} events found: ${allEvents.length} (${breakdown})`);
 
             return allEvents;
         } catch (err) {
@@ -324,8 +357,9 @@ export class TransactionService {
     /**
      * Progressively fetch events from all networks (newest first).
      * Calls `onChunk` as events arrive from each network.
-     * All 3 networks are scanned in parallel for speed.
+     * All deployments of the selected protocol are scanned in parallel for speed.
      *
+     * @param protocol - Which protocol's deployments to scan (Djed or Tectonic)
      * @param merchantAddress - Filter events by merchant/receiver address
      * @param onChunk - Called with each batch of events as they arrive
      * @param options.signal - AbortSignal to cancel the fetch (e.g. when cap is reached)
@@ -333,6 +367,7 @@ export class TransactionService {
      * @returns Per-network cursor results for resuming later
      */
     async fetchStableCoinPurchasesProgressive(
+        protocol: Protocol,
         merchantAddresses: string[] | undefined,
         onChunk: (events: TransactionEvent[]) => void,
         options?: {
@@ -340,14 +375,9 @@ export class TransactionService {
             cursors?: Record<string, string>;
         }
     ): Promise<Record<string, NetworkCursorResult>> {
-        const networkConfigs = [
-            { client: this.sepoliaClient, contract: CONTRACTS.stablepay.address, key: 'sepolia' },
-            { client: this.etcClient, contract: CONTRACTS['stablepay-etc'].address, key: 'ethereum-classic' },
-            { client: this.mordorClient, contract: CONTRACTS['stablepay-mordor'].address, key: 'mordor' },
-        ];
-
         const results = await Promise.all(
-            networkConfigs.map(async ({ client, contract, key }) => {
+            PROTOCOLS[protocol].deployments.map(async (deployment) => {
+                const { key } = deployment;
                 // Skip networks that are already fully scanned
                 const cursorStr = options?.cursors?.[key];
                 if (cursorStr === '0') {
@@ -357,9 +387,8 @@ export class TransactionService {
                 const resumeFromBlock = cursorStr ? BigInt(cursorStr) : undefined;
 
                 const result = await this.fetchEventsFromNetworkReverse(
-                    client,
-                    contract,
-                    key,
+                    protocol,
+                    deployment,
                     merchantAddresses,
                     onChunk,
                     { signal: options?.signal, resumeFromBlock }

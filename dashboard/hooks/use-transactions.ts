@@ -5,9 +5,17 @@ import { parseUnits } from 'viem';
 import { transactionService } from '@/lib/transaction-service';
 import type { TransactionEvent, NetworkCursorResult } from '@/lib/transaction-service';
 import { useWallet } from './use-wallet';
+import { useProtocol } from './use-protocol';
+import { DEFAULT_PROTOCOL } from '@/lib/config';
+import type { Protocol } from '@/lib/config';
 
 // Cache transactions in localStorage
 const CACHE_KEY = 'stablepay_transactions';
+
+const getCacheKey = (protocol: Protocol, addressesKey: string) => {
+    const base = protocol === DEFAULT_PROTOCOL ? CACHE_KEY : `${CACHE_KEY}_${protocol}`;
+    return `${base}_${addressesKey || 'dev'}`;
+};
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200] as const;
 export type PageSize = (typeof PAGE_SIZE_OPTIONS)[number];
@@ -119,6 +127,9 @@ export function useTransactions() {
     const activeAddresses = isDevelopment ? [] : consideredAddresses;
     const addressesKey = activeAddresses.slice().sort().join(',');
     const latestAddressesRef = useRef<string>(addressesKey);
+    const { protocol } = useProtocol();
+    const cacheKey = getCacheKey(protocol, addressesKey);
+    const latestCacheKeyRef = useRef<string>(cacheKey);
     const [transactions, setTransactions] = useState<TransactionEvent[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -155,7 +166,7 @@ export function useTransactions() {
     }, []);
 
     // Helper to persist current transactions to cache (including timestamps)
-    const persistToCache = useCallback((events: TransactionEvent[], wallet: string, fullyLoaded: boolean, cursors: Record<string, string>) => {
+    const persistToCache = useCallback((events: TransactionEvent[], targetCacheKey: string, fullyLoaded: boolean, cursors: Record<string, string>) => {
         const serializableEvents: CachedData['transactions'] = events.map(event => ({
             ...event,
             blockNumber: event.blockNumber.toString(),
@@ -167,17 +178,22 @@ export function useTransactions() {
             isAllTransactionsFetched: fullyLoaded,
             networkCursors: cursors,
         };
-        const cacheKey = `${CACHE_KEY}_${wallet || 'dev'}`;
         try {
-            localStorage.setItem(cacheKey, JSON.stringify(cacheData));
+            localStorage.setItem(targetCacheKey, JSON.stringify(cacheData));
         } catch (err) {
             console.warn('Failed to persist cache:', err);
         }
     }, []);
 
+    useEffect(() => {
+        setFilters(initialFilters);
+    }, [protocol]);
+
     // Clear state when wallet changes
     useEffect(() => {
         latestAddressesRef.current = addressesKey;
+        latestCacheKeyRef.current = cacheKey;
+        abortControllerRef.current?.abort();
         // Reset state for new wallet context
         setTransactions([]);
         setHasFetched(false);
@@ -189,7 +205,6 @@ export function useTransactions() {
         setNetworkCursors({});
         if (!isDevelopment && activeAddresses.length === 0) return;
 
-        const cacheKey = `${CACHE_KEY}_${addressesKey || 'dev'}`;
         const cached = localStorage.getItem(cacheKey);
         if (cached) {
             try {
@@ -214,7 +229,7 @@ export function useTransactions() {
                 console.warn('Failed to parse cached transactions:', err);
             }
         }
-    }, [addressesKey, isDevelopment]);
+    }, [addressesKey, cacheKey, isDevelopment]);
 
     // Filtered transactions
     const filteredTransactions = useMemo(() => {
@@ -290,12 +305,12 @@ export function useTransactions() {
     const fetchTimestamps = useCallback(async () => {
         if (timestampsFetched || fetchingTimestamps || transactions.length === 0) return;
 
-        const addressesAtStart = latestAddressesRef.current;
+        const cacheKeyAtStart = cacheKey;
         try {
             setFetchingTimestamps(true);
             const withTimestamps = await transactionService.fetchTimestampsForEvents(transactions);
-            // Guard: if addresses changed during the async fetch, discard stale results
-            if (latestAddressesRef.current !== addressesAtStart) return;
+            // Guard: if addresses or protocol changed during the async fetch, discard stale results
+            if (latestCacheKeyRef.current !== cacheKeyAtStart) return;
             setTransactions(prev => {
                 const timestampMap = new Map<string, Date>();
                 withTimestamps.forEach(tx => {
@@ -311,7 +326,7 @@ export function useTransactions() {
                 });
                 
                 // Update cache with timestamps using the addresses that were active at fetch start
-                persistToCache(updatedTransactions, addressesAtStart, isAllTransactionsFetched, networkCursors);
+                persistToCache(updatedTransactions, cacheKeyAtStart, isAllTransactionsFetched, networkCursors);
                 return updatedTransactions;
             });
             setTimestampsFetched(true);
@@ -320,7 +335,7 @@ export function useTransactions() {
         } finally {
             setFetchingTimestamps(false);
         }
-    }, [timestampsFetched, fetchingTimestamps, transactions, persistToCache, isAllTransactionsFetched, networkCursors]);
+    }, [timestampsFetched, fetchingTimestamps, transactions, cacheKey, persistToCache, isAllTransactionsFetched, networkCursors]);
 
     // When sort changes to timestamp, auto-fetch timestamps if not already done
     const changeSortBy = useCallback((newSortBy: SortBy) => {
@@ -339,7 +354,9 @@ export function useTransactions() {
 
     // Fetch timestamps specifically for a subset of transactions (e.g., during export)
     const fetchTimestampsForExport = useCallback(async (txsToFetch: TransactionEvent[]) => {
+        const cacheKeyAtStart = latestCacheKeyRef.current;
         const withTimestamps = await transactionService.fetchTimestampsForEvents(txsToFetch);
+        if (latestCacheKeyRef.current !== cacheKeyAtStart) return withTimestamps;
         
         // Update local state and cache with newly fetched timestamps
         setTransactions(prev => {
@@ -356,8 +373,7 @@ export function useTransactions() {
                 return tx;
             });
             
-            const requestAddresses = latestAddressesRef.current;
-            persistToCache(updatedTransactions, requestAddresses, isAllTransactionsFetched, networkCursors);
+            persistToCache(updatedTransactions, cacheKeyAtStart, isAllTransactionsFetched, networkCursors);
             return updatedTransactions;
         });
 
@@ -371,6 +387,8 @@ export function useTransactions() {
 
     const fetchTransactions = async () => {
         const requestAddresses = latestAddressesRef.current;
+        const requestCacheKey = latestCacheKeyRef.current;
+        const requestProtocol = protocol;
         try {
             setLoading(true);
             setError(null);
@@ -388,9 +406,10 @@ export function useTransactions() {
             let hitLimit = false;
 
             const cursors = await transactionService.fetchStableCoinPurchasesProgressive(
+                requestProtocol,
                 requestAddresses ? requestAddresses.split(',') : undefined,
                 (chunk) => {
-                    if (latestAddressesRef.current !== requestAddresses) return;
+                    if (latestCacheKeyRef.current !== requestCacheKey) return;
                     currentEvents = [...currentEvents, ...chunk];
                     if (currentEvents.length >= MAX_EVENTS) {
                         currentEvents = currentEvents.slice(0, MAX_EVENTS);
@@ -404,7 +423,7 @@ export function useTransactions() {
                 { signal: abortController.signal }
             );
 
-            if (latestAddressesRef.current !== requestAddresses) return;
+            if (latestCacheKeyRef.current !== requestCacheKey) return;
 
             const newCursors: Record<string, string> = {};
             for (const [key, res] of Object.entries(cursors)) {
@@ -415,7 +434,7 @@ export function useTransactions() {
             setIsAllTransactionsFetched(allScanned);
 
             setTimestampsFetched(false);
-            persistToCache(currentEvents, requestAddresses, allScanned, newCursors);
+            persistToCache(currentEvents, requestCacheKey, allScanned, newCursors);
         } catch (err) {
             console.error('Error fetching transactions:', err);
             setError(err instanceof Error ? err.message : 'Failed to fetch transactions');
@@ -427,6 +446,8 @@ export function useTransactions() {
     const fetchMore = async () => {
         if (isAllTransactionsFetched || loadingMore || Object.keys(networkCursors).length === 0) return;
         const requestAddresses = latestAddressesRef.current;
+        const requestCacheKey = latestCacheKeyRef.current;
+        const requestProtocol = protocol;
         try {
             setLoadingMore(true);
             setError(null);
@@ -442,9 +463,10 @@ export function useTransactions() {
             const currentTotal = transactions.length;
 
             const cursors = await transactionService.fetchStableCoinPurchasesProgressive(
+                requestProtocol,
                 requestAddresses ? requestAddresses.split(',') : undefined,
                 (chunk) => {
-                    if (latestAddressesRef.current !== requestAddresses) return;
+                    if (latestCacheKeyRef.current !== requestCacheKey) return;
                     newEvents = [...newEvents, ...chunk];
                     if (newEvents.length >= MAX_EVENTS) {
                         newEvents = newEvents.slice(0, MAX_EVENTS);
@@ -456,7 +478,7 @@ export function useTransactions() {
                 { signal: abortController.signal, cursors: networkCursors }
             );
 
-            if (latestAddressesRef.current !== requestAddresses) return;
+            if (latestCacheKeyRef.current !== requestCacheKey) return;
 
             const newCursors: Record<string, string> = {};
             for (const [key, res] of Object.entries(cursors)) {
@@ -469,7 +491,7 @@ export function useTransactions() {
             setTimestampsFetched(false);
 
             setTransactions(prev => {
-                persistToCache(prev, requestAddresses, allScanned, newCursors);
+                persistToCache(prev, requestCacheKey, allScanned, newCursors);
                 return prev;
             });
 
@@ -482,7 +504,6 @@ export function useTransactions() {
     };
 
     const clearCache = () => {
-        const cacheKey = `${CACHE_KEY}_${addressesKey || 'dev'}`;
         localStorage.removeItem(cacheKey);
         setTransactions([]);
         setHasFetched(false);
@@ -493,6 +514,7 @@ export function useTransactions() {
     };
 
     return {
+        protocol,
         transactions,
         paginatedTransactions,
         loading,

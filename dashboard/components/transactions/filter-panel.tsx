@@ -14,6 +14,7 @@ interface FilterPanelProps {
   filters: TransactionFilters;
   onApplyFilters: (filters: TransactionFilters) => void;
   onClearFilters: () => void;
+  networkOptions: string[];
 }
 
 export function FilterPanel({
@@ -22,6 +23,7 @@ export function FilterPanel({
   filters,
   onApplyFilters,
   onClearFilters,
+  networkOptions,
 }: FilterPanelProps) {
   const [localFilters, setLocalFilters] = useState<TransactionFilters>(filters);
 
@@ -86,9 +88,9 @@ export function FilterPanel({
                 onChange={(e) => setLocalFilters({ ...localFilters, blockchain: e.target.value })}
               >
                 <option value="">All Networks</option>
-                <option value="Sepolia">Sepolia</option>
-                <option value="Ethereum Classic">Ethereum Classic</option>
-                <option value="Mordor Testnet">Mordor Testnet</option>
+                {networkOptions.map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
               </select>
             </div>
 
