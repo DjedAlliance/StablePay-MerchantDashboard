@@ -157,6 +157,11 @@ pnpm build
 5.  **Commit your Changes**: `git commit -m 'feat: Add some AmazingFeature'`
 6.  **Push to the Branch**: `git push origin feature/AmazingFeature`
 7.  **Open a Pull Request**
+
+## Terms of Use
+
+Use of StablePay is subject to the [Stability Nexus Terms of Use](https://github.com/StabilityNexus/Info/blob/main/TermsOfUse.md).
+
 <div align="center" >
   <H1>Have a great start to your journey!</H1>
 </div>
