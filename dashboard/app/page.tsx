@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import DashboardPageLayout from "@/components/dashboard/layout"
 import DashboardStat from "@/components/dashboard/stat"
 import DashboardChart from "@/components/dashboard/chart"
@@ -9,6 +9,8 @@ import GearIcon from "@/components/icons/gear"
 import ProcessorIcon from "@/components/icons/proccesor"
 import BoomIcon from "@/components/icons/boom"
 import { useTransactions } from "@/hooks/use-transactions"
+import ProtocolSwitch from "@/components/dashboard/protocol-switch"
+import { DEFAULT_PROTOCOL, PROTOCOLS } from "@/lib/config"
 import mockDataJson from "@/mock.json"
 import type { MockData } from "@/types/dashboard"
 
@@ -35,14 +37,17 @@ interface CachedStats {
 }
 
 export default function DashboardOverview() {
-  const { transactions, hasFetched, loading } = useTransactions();
+  const { protocol, transactions, hasFetched, loading } = useTransactions();
   const [cachedStats, setCachedStats] = useState<CachedStats | null>(null);
   const [isLoadingFresh, setIsLoadingFresh] = useState(false);
+  const statsCacheKey = protocol === DEFAULT_PROTOCOL ? STATS_CACHE_KEY : `${STATS_CACHE_KEY}_${protocol}`;
+  const lastStatsCacheKeyRef = useRef(statsCacheKey);
 
   // Load cached stats on mount
   useEffect(() => {
+    setCachedStats(null);
     try {
-      const cached = localStorage.getItem(STATS_CACHE_KEY);
+      const cached = localStorage.getItem(statsCacheKey);
       if (!cached) return;
       const parsedStats: CachedStats = JSON.parse(cached);
       const isExpired = Date.now() - parsedStats.timestamp > STATS_CACHE_EXPIRY;
@@ -50,7 +55,7 @@ export default function DashboardOverview() {
     } catch (err) {
       console.warn('Failed to load cached stats:', err);
     }
-  }, []);
+  }, [statsCacheKey]);
 
   // Calculate real stats from transactions
   const totalTransactions = transactions.length;
@@ -61,6 +66,10 @@ export default function DashboardOverview() {
 
   // Cache stats whenever transactions change
   useEffect(() => {
+    if (lastStatsCacheKeyRef.current !== statsCacheKey) {
+      lastStatsCacheKeyRef.current = statsCacheKey;
+      return;
+    }
     if (hasFetched) {
       const stats: CachedStats = {
         totalTransactions,
@@ -71,7 +80,7 @@ export default function DashboardOverview() {
         timestamp: Date.now()
       };
       try {
-        localStorage.setItem(STATS_CACHE_KEY, JSON.stringify(stats));
+        localStorage.setItem(statsCacheKey, JSON.stringify(stats));
         setCachedStats(stats);
       } catch (err) {
         console.warn('Failed to persist cached stats:', err);
@@ -80,7 +89,7 @@ export default function DashboardOverview() {
       }
       setIsLoadingFresh(false);
     }
-  }, [transactions, hasFetched, totalTransactions, totalRevenue, successRate, failedTransactions, pendingTransactions]);
+  }, [transactions, hasFetched, statsCacheKey, totalTransactions, totalRevenue, successRate, failedTransactions, pendingTransactions]);
 
   // Track when fresh data is being fetched
   useEffect(() => {
@@ -156,13 +165,15 @@ export default function DashboardOverview() {
       header={{
         title: "Overview",
         description: hasFetched
-          ? "Last updated: Real-time blockchain data"
+          ? `Last updated: Real-time ${PROTOCOLS[protocol].name} blockchain data`
           : cachedStats
             ? `Cached data from ${new Date(cachedStats.timestamp).toLocaleString()}`
             : "Fetch transactions to get analysis",
         icon: BracketsIcon,
       }}
     >
+      <ProtocolSwitch disabled={loading} />
+
       {!hasFetched && !cachedStats && (
         <div className="mb-6 p-4 bg-muted/50 border border-border/40 rounded-lg">
           <p className="text-sm text-muted-foreground">

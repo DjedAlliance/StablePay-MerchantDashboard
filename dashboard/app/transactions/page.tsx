@@ -10,9 +10,10 @@ import DashboardPageLayout from "@/components/dashboard/layout"
 import CreditCardIcon from "@/components/icons/credit-card"
 import { useTransactions, getRiskLevel } from "@/hooks/use-transactions"
 import type { PageSize, SortBy, SortDirection } from "@/hooks/use-transactions"
-import { NETWORKS } from "@/lib/config"
+import { NETWORKS, PROTOCOLS, getProtocolNetworkNames } from "@/lib/config"
 import { FilterPanel } from "@/components/transactions/filter-panel"
 import { ExportDialog } from "@/components/transactions/export-dialog"
+import ProtocolSwitch from "@/components/dashboard/protocol-switch"
 
 // Helper function to format address
 const formatAddress = (address: string) => {
@@ -97,6 +98,7 @@ function CopyableCell({ value, displayValue }: { value: string; displayValue?: R
 
 export default function TransactionsPage() {
   const {
+    protocol,
     transactions,
     paginatedTransactions,
     loading,
@@ -135,6 +137,8 @@ export default function TransactionsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isFilterOpen, setIsFilterOpen] = useState(false)
   const [isExportOpen, setIsExportOpen] = useState(false)
+  const protocolName = PROTOCOLS[protocol].name
+  const networkOptions = useMemo(() => getProtocolNetworkNames(protocol), [protocol])
   const selectedRiskLevel = selectedTransaction
     ? getRiskLevel(selectedTransaction.amountSC)
     : null
@@ -169,6 +173,8 @@ export default function TransactionsPage() {
         <div className="flex items-center gap-2 text-sm">
           <span className="text-muted-foreground">StablePay</span>
           <span className="text-muted-foreground">/</span>
+          <span className="text-muted-foreground uppercase">{protocolName}</span>
+          <span className="text-muted-foreground">/</span>
           <span className="text-primary">TRANSACTIONS</span>
         </div>
         <div className="flex items-center gap-4">
@@ -200,6 +206,7 @@ export default function TransactionsPage() {
           <div>
             <h1 className="text-4xl font-serif mb-2">Transaction Network</h1>
             <p className="text-muted-foreground">Manage and monitor payment operations</p>
+            <ProtocolSwitch className="mt-4" disabled={loading || loadingMore} />
           </div>
           <div className="flex gap-3">
             <Button 
@@ -409,7 +416,7 @@ export default function TransactionsPage() {
                 ) : transactionStats.total === 0 ? (
                   <tr>
                     <td colSpan={9} className="px-6 py-8 text-center text-muted-foreground">
-                      {!hasFetched ? "Click 'See Transactions' to load blockchain data" : "No StableCoin purchase events found"}
+                      {!hasFetched ? `Click 'See Transactions' to load ${protocolName} transactions` : `No ${protocolName} StableCoin purchase events found`}
                     </td>
                   </tr>
                 ) : (
@@ -722,6 +729,7 @@ export default function TransactionsPage() {
         filters={filters}
         onApplyFilters={applyFilters}
         onClearFilters={clearFilters}
+        networkOptions={networkOptions}
       />
       <ExportDialog
         open={isExportOpen}
